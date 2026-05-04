@@ -1,0 +1,11 @@
+# =====================================================================
+# requirements.txt — Danh sách thư viện cần cài đặt
+# =====================================================================
+# CÁCH SỬ DỤNG: pip install -r requirements.txt
+# File này giúp người khác (hoặc Server Cloud) biết dự án cần thư viện gì.
+
+httpx==0.28.1           # Thư viện HTTP bất đồng bộ (thay thế requests)
+python-dotenv==1.2.2    # Đọc file .env chứa API Key
+schedule==1.2.2         # Lập lịch trình tự động (4 giờ/lần)
+pandas==3.0.2           # Xử lý dữ liệu dạng bảng
+streamlit==1.56.0       # Dashboard trực quan hóa dữ liệu
