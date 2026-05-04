@@ -1,95 +1,38 @@
 """
 =====================================================================
-AI TREND AGENT v3.0 — OOP Edition (Phase 3)
+AI TREND AGENT v3.1 — SOLID Edition
 =====================================================================
-FILE NÀY LÀ GÌ?
-    Đây là "Vị Tướng Chỉ Huy" (Orchestrator) của toàn bộ hệ thống.
-    Nó KHÔNG tự tay làm bất kỳ việc gì cả. Nó chỉ:
-    1. Tạo ra các Agent (nhân viên) bằng Factory Pattern
-    2. Ra lệnh cho từng Agent thực thi nhiệm vụ theo đúng thứ tự ETL
-    3. Lập lịch trình tự động (Schedule)
-
-KỸ THUẬT ÁP DỤNG:
-    - [DAY 29] Factory Pattern: AgentFactory.create() tạo ra bất kỳ loại Agent nào.
-    - [DAY 23] Inheritance: Mọi Agent đều kế thừa từ BaseAgent.
-    - [DAY 27] Abstract: Mọi Agent đều bị ép buộc phải có method execute().
+FIX LIST:
+    - [DIP] run_pipeline nhận BaseAgent thay vì concrete class
+    - [ASYNC] Toàn bộ main() chạy trong asyncio.run() — loại bỏ schedule
+    - [OCP] Factory không cần import class cụ thể — Agent tự đăng ký
+    - [L09] Magic numbers → config.py
 =====================================================================
 """
 import os
 import re
-import time
-import schedule
 import asyncio
 import logging
 from dotenv import load_dotenv
 
-# =====================================================================
-# CẤU HÌNH LOGGING TOÀN CỤC (Luật Thép L02)
-# =====================================================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - [%(levelname)s] - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-from modules.scrapers import ScraperAgent
-from modules.cleaner import CleanerAgent
-from modules.storage import StorageAgent
+# Import base_agent TRƯỚC để Factory sẵn sàng
+from modules.base_agent import BaseAgent, AgentFactory
+from modules.models import PipelineContext
+from modules import config
 
-
-# =====================================================================
-# [DAY 29] FACTORY PATTERN — "Nhà máy sản xuất Agent"
-# =====================================================================
-# GIẢI THÍCH TẠI SAO:
-#     Nếu không có Factory, bạn phải nhớ chính xác tên class của từng Agent:
-#         scraper = ScraperAgent(key, topic)
-#         cleaner = CleanerAgent()
-#         storage = StorageAgent()
-#     Rất rối khi có 10-20 loại Agent.
-#
-#     Với Factory, bạn chỉ cần gọi:
-#         scraper = AgentFactory.create("scraper", key=key, topic=topic)
-#     Factory sẽ tự biết phải tạo ra class nào. Code gọn gàng và dễ mở rộng.
-#
-# CÁCH THÊM AGENT MỚI:
-#     Khi bạn muốn thêm "TelegramAgent" sau này, chỉ cần:
-#     1. Tạo file telegram_agent.py (kế thừa BaseAgent)
-#     2. Thêm 1 dòng vào _registry: "telegram": TelegramAgent
-#     → main.py KHÔNG CẦN SỬA GÌ!
-class AgentFactory:
-    """
-    [DAY 29] Nhà máy sản xuất Agent.
-    Dùng Dictionary để ánh xạ tên (string) → Class tương ứng.
-    """
-
-    _registry = {
-        "scraper": ScraperAgent,
-        "cleaner": CleanerAgent,
-        "storage": StorageAgent,
-    }
-
-    @staticmethod
-    def create(agent_type: str, **kwargs):
-        """
-        Tạo ra Agent theo tên.
-        
-        VÍ DỤ:
-            AgentFactory.create("scraper", api_key="abc", topic="AI")
-            → Trả về: ScraperAgent(api_key="abc", topic="AI")
-        
-        **kwargs nghĩa là gì?
-            "Keyword Arguments" — Cho phép truyền BẤT KỲ tham số nào dưới dạng key=value.
-            Factory không cần biết ScraperAgent cần gì, nó chỉ chuyển tiếp toàn bộ kwargs.
-        """
-        agent_class = AgentFactory._registry.get(agent_type)
-        if not agent_class:
-            raise ValueError(f"Không tìm thấy Agent loại: '{agent_type}'. "
-                             f"Các loại hợp lệ: {list(AgentFactory._registry.keys())}")
-        return agent_class(**kwargs)
+# Import các module Agent — decorator @register sẽ TỰ ĐĂNG KÝ vào Factory
+import modules.scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
+import modules.cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
+import modules.storage    # noqa: F401 — side-effect import (đăng ký "storage")
 
 
 def validate_topic(user_input: str) -> str | None:
-    """Kiểm tra và chuẩn hóa từ khóa đầu vào."""
     topic = user_input.strip()
     if not topic:
         return "Artificial Intelligence"
@@ -97,114 +40,91 @@ def validate_topic(user_input: str) -> str | None:
     if not essence:
         return None
     clean_topic = re.sub(r'[\\/*?:"<>|]', "", topic).strip()
-    return clean_topic[:50]
+    return clean_topic[:config.MAX_TOPIC_LENGTH]
 
 
-async def run_pipeline(scraper: ScraperAgent, cleaner: CleanerAgent, storage: StorageAgent):
+async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext):
     """
-    Luồng ETL chính: Extract → Transform → Load.
+    [FIX DIP] Nhận danh sách BaseAgent (abstraction), KHÔNG nhận concrete class.
     
-    GIẢI THÍCH TẠI SAO TRUYỀN OBJECT VÀO (thay vì tạo mới bên trong):
-        Kỹ thuật này gọi là "Dependency Injection" (Tiêm phụ thuộc).
-        Thay vì hàm tự tạo Agent, ta "tiêm" Agent đã tạo sẵn từ bên ngoài vào.
-        Lợi ích: Dễ test (có thể tiêm Agent giả để test) và linh hoạt hơn.
+    Nhờ đó, bạn có thể swap bất kỳ Agent nào mà KHÔNG sửa hàm này:
+        - Thay StorageAgent bằng DatabaseStorageAgent? Được!
+        - Thêm TelegramAgent vào cuối pipeline? Được!
+    
+    [FIX LSP] Vì execute() giờ có CÙNG chữ ký (ctx → ctx),
+    ta có thể duyệt vòng lặp qua MỌI loại Agent một cách đồng nhất.
     """
     logging.info("=" * 60)
-    logging.info(f"KHỞI ĐỘNG CHU KỲ QUÉT: '{scraper.topic.upper()}'")
+    logging.info(f"KHOI DONG CHU KY QUET: '{ctx.topic.upper()}'")
     logging.info("=" * 60)
 
-    # 1. EXTRACT — Trinh sát đi cào tin
-    try:
-        raw_news = await scraper.execute()
-        if not raw_news:
-            logging.warning("Không có dữ liệu thô. Kết thúc chu kỳ.")
-            return
-    except Exception as e:
-        logging.error(f"Lỗi kết nối API: {e}")
-        return
-
-    # 2. TRANSFORM — Dọn dẹp làm sạch
-    try:
-        clean_news = await cleaner.execute(raw_news)
-        logging.info(f"Đã trích xuất {cleaner.total_cleaned} tin độc nhất.")
-    except Exception as e:
-        logging.error(f"Lỗi thuật toán làm sạch: {e}")
-        return
-
-    # 3. LOAD — Hậu cần lưu trữ
-    if clean_news:
+    for agent in agents:
         try:
-            await storage.execute(clean_news, scraper.topic)
+            ctx = await agent.execute(ctx)
+            if not ctx.articles and isinstance(agent, BaseAgent):
+                logging.warning(f"{agent.agent_name} tra ve 0 bai. Kiem tra nguon.")
         except Exception as e:
-            logging.error(f"Lỗi lưu trữ: {e}")
+            logging.error(f"Loi tai {agent.agent_name}: {e}")
+            return
 
     logging.info("=" * 60 + "\n")
 
 
-def run_pipeline_sync_wrapper(scraper, cleaner, storage):
-    """Wrapper đồng bộ để chạy async bên trong thư viện schedule."""
-    asyncio.run(run_pipeline(scraper, cleaner, storage))
-
-
-def main():
-    """Điểm khởi chạy chương trình — Nơi "Vị Tướng" ra lệnh."""
+async def main():
+    """
+    [FIX ASYNC] Toàn bộ main() giờ là async.
+    Dùng asyncio.sleep() thay cho schedule + time.sleep().
+    Loại bỏ dependency 'schedule', loại bỏ antipattern asyncio.run() trong sync wrapper.
+    """
     load_dotenv()
     api_key = os.getenv("NEWS_API_KEY")
     if not api_key:
-        logging.error("Thiếu NEWS_API_KEY trong file .env!")
+        logging.error("Thieu NEWS_API_KEY trong file .env!")
         return
 
-    logging.info("🤖 CHÀO MỪNG ĐẾN VỚI AI TREND AGENT v3.0 (OOP Edition)")
+    logging.info("AI TREND AGENT v3.1 (SOLID Edition)")
 
-    # Nhận từ khóa từ người dùng
     target_topic = None
     while not target_topic:
         try:
-            raw = input("\n👉 Mời bạn nhập từ khóa cần tìm: ")
+            raw = input("\nMoi ban nhap tu khoa can tim: ")
         except KeyboardInterrupt:
-            logging.info("Hủy khởi động. Tạm biệt!")
+            logging.info("Huy khoi dong. Tam biet!")
             return
         target_topic = validate_topic(raw)
         if not target_topic:
-            logging.error("Từ khóa không hợp lệ. Vui lòng thử lại!")
+            logging.error("Tu khoa khong hop le. Vui long thu lai!")
 
-    logging.info(f"Đã chốt mục tiêu: {target_topic}")
+    # Tạo pipeline context — chứa mọi thứ Agent cần
+    ctx_template = PipelineContext(topic=target_topic, api_key=api_key)
 
-    # =====================================================================
-    # [DAY 29] SỬ DỤNG FACTORY — Tạo đội quân Agent
-    # =====================================================================
-    # Thay vì: scraper = ScraperAgent(api_key, target_topic)
-    # Ta dùng:  scraper = AgentFactory.create("scraper", ...)
-    # Lợi ích: Khi thêm Agent mới, chỉ cần thêm 1 dòng vào _registry.
-    scraper = AgentFactory.create("scraper", api_key=api_key, topic=target_topic)
-    cleaner = AgentFactory.create("cleaner")
-    storage = AgentFactory.create("storage")
+    # Tạo đội quân Agent qua Factory (Agent đã tự đăng ký nhờ decorator)
+    agents: list[BaseAgent] = [
+        AgentFactory.create("scraper"),
+        AgentFactory.create("cleaner"),
+        AgentFactory.create("storage"),
+    ]
 
-    # In thông tin Agent (tự động gọi __str__ từ Day 25)
-    logging.info(f"Đã triển khai: {scraper}")
-    logging.info(f"Đã triển khai: {cleaner}")
-    logging.info(f"Đã triển khai: {storage}")
+    for agent in agents:
+        logging.info(f"Da trien khai: {agent}")
 
-    # Chạy chu kỳ đầu tiên
-    time.sleep(1)
-    run_pipeline_sync_wrapper(scraper, cleaner, storage)
-
-    # Lập lịch trình tự động
-    schedule.every(4).hours.do(run_pipeline_sync_wrapper,
-                               scraper=scraper, cleaner=cleaner, storage=storage)
-
-    logging.info(f"AGENT ĐÃ CHUYỂN SANG CHẾ ĐỘ TRỰC CANH (4 GIỜ/LẦN)")
-    logging.info("Nhấn [Ctrl + C] để tắt hệ thống.")
+    # Vòng lặp chính — FULL ASYNC, không cần thư viện schedule
+    interval_seconds = config.SCHEDULE_INTERVAL_HOURS * 3600
+    logging.info(f"AGENT TRUC CANH ({config.SCHEDULE_INTERVAL_HOURS} gio/lan)")
+    logging.info("Nhan [Ctrl + C] de tat he thong.")
 
     try:
         while True:
-            schedule.run_pending()
-            time.sleep(1)
+            # Tạo context MỚI cho mỗi chu kỳ (tránh articles bị dồn từ chu kỳ trước)
+            ctx = PipelineContext(topic=ctx_template.topic, api_key=ctx_template.api_key)
+            await run_pipeline(agents, ctx)
+            logging.info(f"Ngu {config.SCHEDULE_INTERVAL_HOURS} gio roi quet tiep...")
+            await asyncio.sleep(interval_seconds)
     except KeyboardInterrupt:
         logging.info("=" * 60)
-        logging.info("ĐANG TẮT HỆ THỐNG AN TOÀN...")
+        logging.info("DANG TAT HE THONG AN TOAN...")
         logging.info("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
