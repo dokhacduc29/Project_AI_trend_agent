@@ -112,6 +112,8 @@ class StorageAgent(BaseAgent):
                         "Nguon": art.source,
                         "Ngay": art.date,
                         "Tags": ", ".join(art.tags),
+                        "Tom_Tat": art.summary,
+                        "Tam_Ly": art.sentiment.value if hasattr(art.sentiment, "value") else str(art.sentiment),
                         "Link_Bai": art.url,
                     })
             self.log_info(f"Da noi them {len(new_data)} tin MOI vao: {filepath}")

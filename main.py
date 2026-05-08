@@ -29,6 +29,7 @@ from modules import config
 # Import các module Agent — decorator @register sẽ TỰ ĐĂNG KÝ vào Factory
 import modules.scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
 import modules.cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
+import modules.ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
 import modules.storage    # noqa: F401 — side-effect import (đăng ký "storage")
 
 
@@ -78,9 +79,13 @@ async def main():
     """
     load_dotenv()
     api_key = os.getenv("NEWS_API_KEY")
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+
     if not api_key:
         logging.error("Thieu NEWS_API_KEY trong file .env!")
         return
+    if not gemini_api_key:
+        logging.warning("Thieu GEMINI_API_KEY. Chuc nang AI se bi bo qua!")
 
     logging.info("AI TREND AGENT v3.1 (SOLID Edition)")
 
@@ -96,12 +101,17 @@ async def main():
             logging.error("Tu khoa khong hop le. Vui long thu lai!")
 
     # Tạo pipeline context — chứa mọi thứ Agent cần
-    ctx_template = PipelineContext(topic=target_topic, api_key=api_key)
+    ctx_template = PipelineContext(
+        topic=target_topic, 
+        api_key=api_key, 
+        gemini_api_key=gemini_api_key or ""
+    )
 
     # Tạo đội quân Agent qua Factory (Agent đã tự đăng ký nhờ decorator)
     agents: list[BaseAgent] = [
         AgentFactory.create("scraper"),
         AgentFactory.create("cleaner"),
+        AgentFactory.create("analyzer"), # [Phase 4] Tích hợp bộ não AI
         AgentFactory.create("storage"),
     ]
 
@@ -116,11 +126,15 @@ async def main():
     try:
         while True:
             # Tạo context MỚI cho mỗi chu kỳ (tránh articles bị dồn từ chu kỳ trước)
-            ctx = PipelineContext(topic=ctx_template.topic, api_key=ctx_template.api_key)
+            ctx = PipelineContext(
+                topic=ctx_template.topic, 
+                api_key=ctx_template.api_key,
+                gemini_api_key=ctx_template.gemini_api_key
+            )
             await run_pipeline(agents, ctx)
             logging.info(f"Ngu {config.SCHEDULE_INTERVAL_HOURS} gio roi quet tiep...")
             await asyncio.sleep(interval_seconds)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         logging.info("=" * 60)
         logging.info("DANG TAT HE THONG AN TOAN...")
         logging.info("=" * 60)
