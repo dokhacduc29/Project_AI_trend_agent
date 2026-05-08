@@ -3,7 +3,6 @@
 SCRAPER AGENT — Cào tin đa nguồn (BẢN SỬA TOÀN BỘ BUGS & SMELLS)
 =====================================================================
 FIX LIST:
-    - [BUG] Reddit URL typo: ArtificialInteligence → ArtificialIntelligence
     - [SMELL] Magic numbers → Import từ config.py
     - [LSP] execute() signature thống nhất: nhận/trả PipelineContext
     - [OCP] Tự đăng ký vào Factory bằng decorator @AgentFactory.register
@@ -78,7 +77,6 @@ class ScraperAgent(BaseAgent):
 
     async def _fetch_reddit(self, client: httpx.AsyncClient) -> list[Article]:
         headers = {"User-Agent": config.REDDIT_USER_AGENT}
-        # [FIX BUG] URL đã sửa: ArtificialInteligence → ArtificialIntelligence
         url = f"https://www.reddit.com/r/{config.REDDIT_SUBREDDIT}/new.json?limit={config.REDDIT_LIMIT}"
         try:
             res = await client.get(url, headers=headers, timeout=config.REQUEST_TIMEOUT)
