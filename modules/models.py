@@ -15,6 +15,13 @@ FIX LSP (Liskov Substitution Principle):
 =====================================================================
 """
 from dataclasses import dataclass, field
+from enum import Enum
+
+class Sentiment(Enum):
+    """[DAY 38] Định nghĩa trạng thái thị trường."""
+    BULLISH = "Tích cực"
+    BEARISH = "Tiêu cực"
+    NEUTRAL = "Trung lập"
 
 
 @dataclass
@@ -25,6 +32,8 @@ class Article:
     date: str
     url: str
     tags: list[str] = field(default_factory=list)
+    summary: str = ""                     # [Phase 4] Nội dung tóm tắt từ AI
+    sentiment: Sentiment = Sentiment.NEUTRAL # [Phase 4] Đánh giá tích cực/tiêu cực
 
     def __str__(self) -> str:
         tag_str = ", ".join(self.tags) if self.tags else "Chưa phân loại"
@@ -53,13 +62,9 @@ class PipelineContext:
         
         Giờ: Mọi Agent đều nhận 1 PipelineContext và trả về PipelineContext.
         Mỗi Agent tự đọc cái nó cần (topic, api_key, articles) từ context.
-        
-    VÍ DỤ LUỒNG CHẠY:
-        ctx = PipelineContext(topic="AI", api_key="abc")
-        ctx = await scraper.execute(ctx)   # ctx.articles được điền dữ liệu
-        ctx = await cleaner.execute(ctx)   # ctx.articles được lọc sạch
-        ctx = await storage.execute(ctx)   # ctx.articles được lưu xuống file
+
     """
     topic: str = ""
-    api_key: str = ""
+    api_key: str = ""          # NewsAPI key
+    gemini_api_key: str = ""   # [Phase 4] Gemini API key
     articles: list[Article] = field(default_factory=list)

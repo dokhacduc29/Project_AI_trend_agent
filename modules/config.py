@@ -22,6 +22,10 @@ REDDIT_USER_AGENT: str = "AI-Trend-Agent-V3-OOP"
 SCHEDULE_INTERVAL_HOURS: int = 4    # Chu kỳ quét tự động (giờ)
 MAX_TOPIC_LENGTH: int = 50          # Độ dài tối đa từ khóa tìm kiếm
 
+# --- AI CONFIG (PHASE 4) ---
+GEMINI_MODEL_NAME: str = "gemini-2.5-flash" # Mô hình tối ưu tốc độ/chi phí
+AI_MAX_ARTICLES_PER_BATCH: int = 15         # Số bài tối đa gửi AI mỗi lần để tránh quá tải
+
 # --- STORAGE CONFIG ---
 OUTPUT_DIR: str = "data"             # Thư mục lưu file CSV
-CSV_FIELDNAMES: list[str] = ["STT", "Tieu_De", "Nguon", "Ngay", "Tags", "Link_Bai"]
+CSV_FIELDNAMES: list[str] = ["STT", "Tieu_De", "Nguon", "Ngay", "Tags", "Tom_Tat", "Tam_Ly", "Link_Bai"]
