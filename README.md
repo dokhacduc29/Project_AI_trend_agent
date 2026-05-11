@@ -1,6 +1,7 @@
 # 🤖 AI Trend Agent v3.1 — SOLID Edition
 
 > An automated AI news aggregation pipeline that scrapes, cleans, tags, and stores trending AI articles from multiple sources — built with async Python, OOP, and SOLID principles.
+> Following newest claude model 3.7 and mindset of karpathy
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-OOP%20%2B%20SOLID-green)
