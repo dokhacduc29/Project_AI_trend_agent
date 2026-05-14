@@ -8,6 +8,18 @@ Mục tiêu:
 =====================================================================
 """
 import pytest
+import sys
+import os
+
+# Nạp động các thư mục Backend vào sys.path để pytest nhận diện các module phẳng
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_agent.Infrastructure"]:
+    layer_dir = os.path.join(backend_dir, layer)
+    if layer_dir not in sys.path:
+        sys.path.insert(0, layer_dir)
+
 from models import Article, PipelineContext, Sentiment
 from base_agent import AgentFactory
 
