@@ -26,3 +26,6 @@ Ghi nhận các quyết định thiết kế quan trọng, thay đổi kiến tr
 - **Threading xử lý File (Day 42)**: Tích hợp thành công cơ chế `asyncio.to_thread` vào `storage.py` để đẩy các tác vụ I/O ghi đĩa đồng bộ sang luồng nền riêng biệt, loại bỏ rủi ro ách tắc Event Loop.
 - **Profiling Hệ thống (Day 47)**: Bổ sung cờ `--profile` vào `main.py` kích hoạt `cProfile` cho phép đo lường và in báo cáo Top 30 hàm tiêu tốn nhiều thời gian nhất.
 - **Unit Testing Chuyên nghiệp (Day 49)**: Khởi tạo bộ kiểm thử tự động `Backend/ai_trend_agent.Tests/test_agents.py` sử dụng khung `pytest` và `pytest-asyncio` xác thực độ chính xác của các thuật toán lõi.
+
+### 6. Gộp Nhánh Chính Thức (Merge to Main)
+- Gộp toàn bộ thành quả Giai đoạn 4 và Giai đoạn 5 từ nhánh `feature-phase-4-ai` sang nhánh `main` để thiết lập trạng thái chuẩn làm mặc định cho các lượt tải/clone mã nguồn mới.
