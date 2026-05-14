@@ -18,3 +18,6 @@ Ghi nhận các quyết định thiết kế quan trọng, thay đổi kiến tr
 - **L05 (No Blocking Async)**: Tận dụng hoàn toàn I/O bất đồng bộ qua `httpx.AsyncClient` và `asyncio.gather()`. Không sử dụng các tác vụ chờ đồng bộ gây nghẽn luồng.
 - **L16 (No Sensitive Logging)**: Thông tin ghi nhận giới hạn ở mức độ đo lường hiệu suất (Timer), số lượng bản ghi và thông tin tracing cơ bản.
 - **L19 (No Magic Numbers)**: Các thông số vòng đời, kích thước trang, định mức truy vấn đều được quản lý tập trung tại `config.py`.
+
+### 4. Đồng bộ Lộ trình Chiến lược (Roadmap .v2)
+- Cập nhật ánh xạ thực tế các kỹ năng Python Backend đã được lập trình hoàn chỉnh vào cột Trạng thái của file `Roadmap .v2.csv` (đánh dấu `✅ Done` cho các ngày thuộc Phase 2, 3, 4, 5 tương ứng với mã nguồn Core ETL hiện hành).
