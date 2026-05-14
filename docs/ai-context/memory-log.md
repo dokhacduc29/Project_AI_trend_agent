@@ -21,3 +21,8 @@ Ghi nhận các quyết định thiết kế quan trọng, thay đổi kiến tr
 
 ### 4. Đồng bộ Lộ trình Chiến lược (Roadmap .v2)
 - Cập nhật ánh xạ thực tế các kỹ năng Python Backend đã được lập trình hoàn chỉnh vào cột Trạng thái của file `Roadmap .v2.csv` (đánh dấu `✅ Done` cho các ngày thuộc Phase 2, 3, 4, 5 tương ứng với mã nguồn Core ETL hiện hành).
+
+### 5. Hoàn thiện Toàn diện Giai đoạn 5 (Tối ưu Đa nhân & Kiểm thử)
+- **Threading xử lý File (Day 42)**: Tích hợp thành công cơ chế `asyncio.to_thread` vào `storage.py` để đẩy các tác vụ I/O ghi đĩa đồng bộ sang luồng nền riêng biệt, loại bỏ rủi ro ách tắc Event Loop.
+- **Profiling Hệ thống (Day 47)**: Bổ sung cờ `--profile` vào `main.py` kích hoạt `cProfile` cho phép đo lường và in báo cáo Top 30 hàm tiêu tốn nhiều thời gian nhất.
+- **Unit Testing Chuyên nghiệp (Day 49)**: Khởi tạo bộ kiểm thử tự động `Backend/ai_trend_agent.Tests/test_agents.py` sử dụng khung `pytest` và `pytest-asyncio` xác thực độ chính xác của các thuật toán lõi.

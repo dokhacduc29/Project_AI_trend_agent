@@ -9,3 +9,5 @@ python-dotenv==1.2.2    # Đọc file .env chứa API Key
 pandas==3.0.2           # Xử lý dữ liệu dạng bảng
 streamlit==1.56.0       # Dashboard trực quan hóa dữ liệu
 google-generativeai     # [Phase 4] Tương tác với Google Gemini API
+pytest==8.3.4           # [Phase 5] Khung Unit Testing chuyên nghiệp
+pytest-asyncio==0.25.0  # [Phase 5] Hỗ trợ kiểm thử các hàm async/await

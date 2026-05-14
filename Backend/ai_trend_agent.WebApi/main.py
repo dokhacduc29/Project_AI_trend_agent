@@ -154,4 +154,26 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if "--profile" in sys.argv:
+        import cProfile
+        import pstats
+        import io
+        logging.info("BAT DAU CHE DO PROFILING (Day 47)...")
+        pr = cProfile.Profile()
+        pr.enable()
+        try:
+            asyncio.run(main())
+        except (KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            pr.disable()
+            s = io.StringIO()
+            sortby = pstats.SortKey.CUMULATIVE
+            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+            ps.print_stats(30)
+            logging.info("=" * 60)
+            logging.info("KET QUA PROFILING (Top 30 ham tieu ton thoi gian nhat):")
+            print(s.getvalue())
+            logging.info("=" * 60)
+    else:
+        asyncio.run(main())

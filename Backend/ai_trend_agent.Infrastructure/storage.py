@@ -1,16 +1,19 @@
 """
 =====================================================================
-STORAGE AGENT — Lưu trữ dữ liệu (BẢN SỬA BUGS + LSP + OCP)
+STORAGE AGENT — Lưu trữ dữ liệu (BẢN SỬA BUGS + LSP + OCP + THREADING)
 =====================================================================
 FIX LIST:
     - [BUG] STT counter: Dùng max(STT) từ file thay vì đếm title
     - [LSP] execute(ctx: PipelineContext) → PipelineContext
     - [OCP] @AgentFactory.register("storage")
     - [SMELL] Magic numbers → Import từ config.py
+    - [DAY 42] Threading: Tách tác vụ đọc/ghi file CSV sang Thread riêng
+               để không gây ách tắc (block) vòng lặp sự kiện asyncio.
 =====================================================================
 """
 import csv
 import os
+import asyncio
 from collections import defaultdict
 from base_agent import BaseAgent, AgentFactory
 from models import Article, PipelineContext
@@ -37,9 +40,6 @@ class StorageAgent(BaseAgent):
         [FIX BUG STT] Đọc file cũ, trả về:
             - Set các title đã lưu (để lọc trùng)
             - Giá trị STT lớn nhất (để đánh số tiếp theo CHÍNH XÁC)
-        
-        BUG CŨ: Dùng len(existing_titles) để tính STT → Sai khi có title trùng bị lọc.
-        FIX: Đọc trực tiếp cột STT, lấy giá trị MAX.
         """
         existing_titles: set[str] = set()
         max_stt: int = 0
@@ -77,28 +77,8 @@ class StorageAgent(BaseAgent):
             for tag, count in tag_stats.items():
                 self.log_info(f"   [Tag] {tag}: xuat hien {count} lan")
 
-    async def execute(self, ctx: PipelineContext) -> PipelineContext:
-        """
-        [FIX LSP] Chữ ký thống nhất: nhận PipelineContext, trả PipelineContext.
-        Đọc ctx.articles để lưu, đọc ctx.topic để đặt tên file.
-        """
-        os.makedirs(config.OUTPUT_DIR, exist_ok=True)
-        filepath = os.path.join(config.OUTPUT_DIR, self._generate_safe_filename(ctx.topic))
-        file_exists = os.path.isfile(filepath)
-
-        # Đọc lịch sử + lấy STT max CHÍNH XÁC
-        existing_titles, max_stt = self._load_existing_data(filepath)
-
-        # Lọc tin mới
-        new_data = [art for art in ctx.articles if art.title.strip() not in existing_titles]
-
-        if not new_data:
-            self.log_info("Khong co tin moi. Du lieu cu giu nguyen an toan.")
-            return ctx
-
-        self._print_analytics(new_data)
-
-        # Ghi nối tiếp — STT bắt đầu từ max_stt + 1 (FIX BUG)
+    def _write_csv_sync(self, filepath: str, file_exists: bool, new_data: list[Article], max_stt: int):
+        """Hàm thực thi ghi file CSV đồng bộ được gọi qua Threading."""
         try:
             with open(filepath, mode="a", encoding="utf-8", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=config.CSV_FIELDNAMES)
@@ -116,8 +96,32 @@ class StorageAgent(BaseAgent):
                         "Tam_Ly": art.sentiment.value if hasattr(art.sentiment, "value") else str(art.sentiment),
                         "Link_Bai": art.url,
                     })
-            self.log_info(f"Da noi them {len(new_data)} tin MOI vao: {filepath}")
+            self.log_info(f"Da noi them {len(new_data)} tin MOI vao: {filepath} (qua Threading)")
         except Exception as e:
             self.log_error(f"Loi ghi file CSV: {e}")
+
+    async def execute(self, ctx: PipelineContext) -> PipelineContext:
+        """
+        [FIX LSP + DAY 42 THREADING] Chữ ký thống nhất.
+        Offload các tác vụ I/O file nặng sang luồng riêng qua asyncio.to_thread.
+        """
+        os.makedirs(config.OUTPUT_DIR, exist_ok=True)
+        filepath = os.path.join(config.OUTPUT_DIR, self._generate_safe_filename(ctx.topic))
+        file_exists = os.path.isfile(filepath)
+
+        # Đọc lịch sử + lấy STT max CHÍNH XÁC qua Threading (Day 42)
+        existing_titles, max_stt = await asyncio.to_thread(self._load_existing_data, filepath)
+
+        # Lọc tin mới
+        new_data = [art for art in ctx.articles if art.title.strip() not in existing_titles]
+
+        if not new_data:
+            self.log_info("Khong co tin moi. Du lieu cu giu nguyen an toan.")
+            return ctx
+
+        self._print_analytics(new_data)
+
+        # Ghi nối tiếp sang Thread riêng tránh block Event Loop (Day 42)
+        await asyncio.to_thread(self._write_csv_sync, filepath, file_exists, new_data, max_stt)
 
         return ctx
