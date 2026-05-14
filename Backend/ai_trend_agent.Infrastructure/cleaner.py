@@ -8,8 +8,8 @@ FIX LIST:
 =====================================================================
 """
 import re
-from modules.base_agent import BaseAgent, AgentFactory
-from modules.models import Article, PipelineContext
+from base_agent import BaseAgent, AgentFactory
+from models import Article, PipelineContext
 
 
 @AgentFactory.register("cleaner")

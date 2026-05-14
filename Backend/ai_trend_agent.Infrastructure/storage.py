@@ -12,9 +12,9 @@ FIX LIST:
 import csv
 import os
 from collections import defaultdict
-from modules.base_agent import BaseAgent, AgentFactory
-from modules.models import Article, PipelineContext
-from modules import config
+from base_agent import BaseAgent, AgentFactory
+from models import Article, PipelineContext
+import config
 
 
 @AgentFactory.register("storage")

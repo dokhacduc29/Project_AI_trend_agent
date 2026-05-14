@@ -22,6 +22,7 @@ __pycache__/
 
 # 4. FILE DỮ LIỆU TẠM: Dữ liệu CSV do Bot tạo ra (mỗi máy tự sinh)
 data/*.csv
+data/*.json
 
 # 5. IDE/EDITOR: File cấu hình riêng của từng máy
 .vscode/

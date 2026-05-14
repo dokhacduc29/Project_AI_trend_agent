@@ -10,7 +10,7 @@ FIX OCP (Open/Closed Principle):
 """
 from abc import ABC, abstractmethod
 import logging
-from modules.models import PipelineContext
+from models import PipelineContext
 
 
 class AgentFactory:

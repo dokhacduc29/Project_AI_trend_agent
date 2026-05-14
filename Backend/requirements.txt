@@ -6,7 +6,6 @@
 
 httpx==0.28.1           # Thư viện HTTP bất đồng bộ (thay thế requests)
 python-dotenv==1.2.2    # Đọc file .env chứa API Key
-schedule==1.2.2         # Lập lịch trình tự động (4 giờ/lần)
 pandas==3.0.2           # Xử lý dữ liệu dạng bảng
 streamlit==1.56.0       # Dashboard trực quan hóa dữ liệu
 google-generativeai     # [Phase 4] Tương tác với Google Gemini API

@@ -1,0 +1,9 @@
+{
+    "extraPaths": [
+        "D:/python_selflearn/AI_Trend_Agent/Backend",
+        "D:/python_selflearn/AI_Trend_Agent/Backend/ai_trend_agent.Domain",
+        "D:/python_selflearn/AI_Trend_Agent/Backend/ai_trend_agent.Application",
+        "D:/python_selflearn/AI_Trend_Agent/Backend/ai_trend_agent.Infrastructure",
+        "D:/python_selflearn/AI_Trend_Agent/Backend/ai_trend_agent.WebApi"
+    ]
+}

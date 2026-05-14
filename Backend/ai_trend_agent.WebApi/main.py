@@ -21,16 +21,27 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+import sys
+# Dynamically add Backend layers to sys.path so direct imports work seamlessly
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_agent.Infrastructure"]:
+    layer_dir = os.path.join(backend_dir, layer)
+    if layer_dir not in sys.path:
+        sys.path.insert(0, layer_dir)
+
 # Import base_agent TRƯỚC để Factory sẵn sàng
-from modules.base_agent import BaseAgent, AgentFactory
-from modules.models import PipelineContext
-from modules import config
+from base_agent import BaseAgent, AgentFactory
+from models import PipelineContext
+import config
 
 # Import các module Agent — decorator @register sẽ TỰ ĐĂNG KÝ vào Factory
-import modules.scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
-import modules.cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
-import modules.ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
-import modules.storage    # noqa: F401 — side-effect import (đăng ký "storage")
+import scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
+import cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
+import ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
+import storage    # noqa: F401 — side-effect import (đăng ký "storage")
+import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram")
 
 
 def validate_topic(user_input: str) -> str | None:
@@ -77,7 +88,8 @@ async def main():
     Dùng asyncio.sleep() thay cho schedule + time.sleep().
     Loại bỏ dependency 'schedule', loại bỏ antipattern asyncio.run() trong sync wrapper.
     """
-    load_dotenv()
+    env_path = os.path.join(backend_dir, ".env")
+    load_dotenv(env_path)
     api_key = os.getenv("NEWS_API_KEY")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
 
@@ -113,6 +125,7 @@ async def main():
         AgentFactory.create("cleaner"),
         AgentFactory.create("analyzer"), # [Phase 4] Tích hợp bộ não AI
         AgentFactory.create("storage"),
+        AgentFactory.create("telegram"), # [Phase 6] Gửi thông báo Telegram
     ]
 
     for agent in agents:
