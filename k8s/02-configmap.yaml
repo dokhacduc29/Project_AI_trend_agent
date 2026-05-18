@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-trend-agent-config
+  namespace: ai-trend-agent
+data:
+  TOPIC: "Artificial Intelligence"
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  STARTUP_DELAY_SECONDS: "15"

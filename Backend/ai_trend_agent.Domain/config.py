@@ -14,7 +14,7 @@ TẠI SAO CẦN FILE NÀY?
 REQUEST_TIMEOUT: float = 10.0       # Giây chờ tối đa cho mỗi API call
 NEWSAPI_PAGE_SIZE: int = 10          # Số bài tối đa lấy từ NewsAPI mỗi lần
 REDDIT_LIMIT: int = 5               # Số bài tối đa lấy từ Reddit
-REDDIT_SUBREDDIT: str = "ArtificialIntelligence"  # Tên subreddit ĐÚNG CHÍNH TẢ
+REDDIT_SUBREDDIT: str = "artificial"
 GOOGLE_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ Google News RSS
 REDDIT_USER_AGENT: str = "AI-Trend-Agent-V3-OOP"
 

@@ -36,3 +36,11 @@ Thumbs.db
 
 # 7. AI AGENT LOCAL BRAIN: Giữ lại trên GitHub vì đây là tài liệu dự án
 # .agents/   ← KHÔNG bỏ vào gitignore vì muốn chia sẻ quy tắc code
+
+# 8. K8s SECRETS: Chứa API keys thật (base64) — KHÔNG commit
+k8s/01-secret.yaml
+
+# 9. DATA & TEST files
+Backend/data/
+Backend/quick_test.py
+Backend/test_supabase_connection.py
