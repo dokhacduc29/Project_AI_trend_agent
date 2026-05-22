@@ -300,3 +300,30 @@ Commit convention: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
 ## 📄 License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+Hướng dẫn chạy toàn bộ dự án
+1. Chạy unit test:
+
+
+venv\Scripts\activate
+cd Backend
+pytest ai_trend_agent.Tests/ -v
+2. Chạy app local:
+
+
+python Backend/ai_trend_agent.WebApi/main.py
+3. Chạy bằng Docker:
+
+
+docker run --env-file Backend/.env ai-trend-agent:v4
+4. Chạy trên K8s (minikube) — production-like:
+
+
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/01-secret.yaml
+kubectl apply -f k8s/02-configmap.yaml
+kubectl apply -f k8s/03-deployment.yaml
+kubectl apply -f k8s/04-service.yaml
+
+kubectl logs -f deployment/ai-trend-agent -n ai-trend-agent
+Lưu ý: requirements.txt đang nằm ở Backend/requirements.txt, không phải root. Nếu CLAUDE.md ghi pip install -r requirements.txt thì cần sửa đường dẫn cho khớp.
