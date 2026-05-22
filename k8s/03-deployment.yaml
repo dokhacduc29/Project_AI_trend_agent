@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ai-trend-agent
-          image: ai-trend-agent:v2
+          image: ai-trend-agent:v3
           # Dùng image từ local minikube (không cần push lên registry)
           imagePullPolicy: Never
           resources:

@@ -16,20 +16,31 @@
 
 ```
 AI_Trend_Agent/
-├── main.py                  # Orchestrator: asyncio.run(main()) → run_pipeline(agents, ctx)
-├── modules/
-│   ├── base_agent.py        # BaseAgent (ABC) + AgentFactory (decorator-based)
-│   ├── models.py            # @dataclass Article + PipelineContext
-│   ├── config.py            # Hằng số tập trung — Luật L09
-│   ├── scrapers.py          # ScraperAgent — async multi-source
-│   ├── cleaner.py           # CleanerAgent — regex tag + dedupe
-│   ├── ai_agent.py          # AIAnalyzerAgent — Gemini summary + sentiment
-│   ├── storage.py           # StorageAgent — CSV append
-│   └── decorators.py        # @retry, @timer, context managers
-├── data/                    # Output CSV (auto-tạo, gitignore)
+├── Dockerfile               # Multi-stage build (builder + runtime, non-root)
+├── .dockerignore
+├── k8s/                     # K8s manifests (00-namespace → 04-service)
+├── Backend/
+│   ├── requirements.txt
+│   ├── .env                 # NEWS_API_KEY, GEMINI_API_KEY, SUPABASE_* (KHÔNG commit)
+│   ├── ai_trend_agent.Domain/
+│   │   ├── models.py            # @dataclass Article + PipelineContext + Sentiment enum
+│   │   └── config.py            # Hằng số tập trung — Luật L09
+│   ├── ai_trend_agent.Application/
+│   │   ├── base_agent.py        # BaseAgent (ABC) + AgentFactory (decorator-based)
+│   │   └── decorators.py        # @retry, @timer, context managers
+│   ├── ai_trend_agent.Infrastructure/
+│   │   ├── scrapers.py          # ScraperAgent — async multi-source
+│   │   ├── cleaner.py           # CleanerAgent — regex tag + dedupe
+│   │   ├── ai_agent.py          # AIAnalyzerAgent — Gemini summary + sentiment
+│   │   ├── storage.py           # StorageAgent — CSV append (legacy fallback)
+│   │   ├── database_storage.py  # DatabaseStorageAgent — Supabase PostgreSQL
+│   │   └── telegram_agent.py    # TelegramAgent — stub (Phase 6)
+│   ├── ai_trend_agent.WebApi/
+│   │   └── main.py              # Orchestrator: asyncio.run(main()) → run_pipeline
+│   └── ai_trend_agent.Tests/
+│       └── test_agents.py       # pytest unit tests
 ├── .claude/skills/          # Skills định nghĩa hành vi AI agent
-├── knowledge/               # LLM Wiki — kiến thức dự án
-└── .env                     # NEWS_API_KEY, GEMINI_API_KEY (KHÔNG commit)
+└── docs/                    # Tài liệu, roadmap, kiến trúc
 ```
 
 ## 3. 10 Iron Laws (rút gọn)
@@ -76,10 +87,14 @@ Chi tiết đầy đủ: xem `.claude/skills/coding-rules/SKILL.md`.
 # Cài đặt
 python -m venv venv
 venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r Backend/requirements.txt
 
 # Chạy
-python main.py
+python Backend/ai_trend_agent.WebApi/main.py
+
+# Chạy test
+cd Backend
+pytest ai_trend_agent.Tests/ -v
 
 # Dừng an toàn: Ctrl + C
 ```
@@ -89,8 +104,10 @@ python main.py
 - [x] Phase 1-2: Foundation + Pythonic
 - [x] Phase 3: OOP + SOLID
 - [x] Phase 4: Gemini AI integration
-- [ ] Phase 5: SQLite/PostgreSQL thay CSV
-- [ ] Phase 6: Telegram/Discord publisher
+- [x] Phase 5: Supabase PostgreSQL cloud database (thay CSV)
+- [x] Deploy: Docker multi-stage build + Kubernetes (minikube)
+- [ ] Phase 6: Telegram/Discord publisher (TelegramAgent hiện là stub)
+- [ ] CI/CD: GitHub Actions pipeline
 
 Chi tiết: `.claude/skills/roadmap/SKILL.md`.
 

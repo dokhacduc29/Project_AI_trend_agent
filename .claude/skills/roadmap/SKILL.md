@@ -5,45 +5,45 @@ description: Trạng thái phase hiện tại và roadmap dài hạn của dự 
 
 # Roadmap — AI Trend Agent
 
-## Trạng thái hiện tại (2026-05-08)
+## Trạng thái hiện tại (2026-05-22)
 
-**Branch active**: `feature-phase4-ai`
+**Branch active**: `main`
 
 ### Đã hoàn thành
 
 | Phase | Nội dung | Trạng thái |
 |-------|----------|-----------|
-| 1 | Foundation: requests, JSON/RSS parsing | ✅ |
-| 2 | Pythonic: Set dedupe, list comprehension, regex tagging | ✅ |
+| 1 | Foundation: httpx, JSON/RSS parsing | ✅ |
+| 2 | Pythonic: Set dedupe, comprehensions, regex tagging, Multi-layer refactor | ✅ |
 | 3 | OOP + SOLID: BaseAgent, Factory pattern, async refactor | ✅ |
 | 4 | Gemini AI: summary + sentiment, decorators, context managers | ✅ |
+| 5 | Cloud DB: Supabase PostgreSQL (`DatabaseStorageAgent`) | ✅ |
+| Deploy | Docker multi-stage build + Kubernetes (minikube) | ✅ |
 
 ### Đang thực thi
 
-Hiện tại dự án ở trạng thái **stable Phase 4**. Trọng tâm tiếp theo:
-
-1. Ổn định AIAnalyzerAgent (rate limit, retry, fallback khi Gemini fail).
-2. Test coverage — chưa có pytest suite.
-3. Chuẩn bị migrate CSV → SQLite (Phase 5).
+1. Mở rộng test coverage — đã có `test_agents.py`, cần thêm case.
+2. Profiling pipeline (đo tốc độ từng agent).
+3. Hoàn thiện `TelegramAgent` — hiện chỉ là stub, chưa gọi API Telegram thật.
 
 ### Sắp tới
 
 | Phase | Nội dung | Điều kiện tiên quyết |
 |-------|----------|---------------------|
-| 5 | DB storage (SQLite → PostgreSQL) | Phase 4 stable + có test |
-| 6 | Multi-channel publisher (Telegram/Discord) | Phase 5 done |
-| 7+ | RAG chatbot, full-text extraction, Celery, Redis cache | Phase 6 done |
+| 6 | Multi-channel publisher (Telegram/Discord) | TelegramAgent stub → hoàn thiện |
+| CI/CD | GitHub Actions: build → test → scan → deploy | Test suite ổn định |
+| 7+ | FastAPI Web API, RAG chatbot, full-text extraction | Phase 6 done |
 
 ## Chỉ thị cho AI Agent
 
 - Khi user yêu cầu code mới: **ưu tiên** task trong "Đang thực thi".
-- Nếu user đòi Docker/Cloud deploy ngay → **cảnh báo** rằng cần hoàn thành test + DB migration trước.
-- Nếu user đòi nhảy thẳng tới Phase 7 (RAG) → cảnh báo rằng cần Phase 5 (DB) làm nền.
+- Nếu user đòi nhảy thẳng tới Phase 7 (RAG/FastAPI) → cảnh báo rằng cần hoàn thiện Phase 6 trước.
 - Mọi đề xuất nhảy phase phải kèm ADR trong `knowledge/decisions/`.
 
-## Advanced upgrades (Senior Level — chưa lên lịch)
+## Tính năng chưa phát triển (để rỗng — chưa làm)
 
-- **RAG Evolution**: CSV → Vector DB (Pinecone/Chroma).
-- **Full-text extraction**: Scrape body bài viết, không chỉ title.
-- **Task queue**: Celery/RabbitMQ chống crash khi network/API fail.
-- **Redis cache**: O(1) dedupe persistent cross-restart.
+- **TelegramAgent**: file tồn tại nhưng `execute()` chỉ là stub, chưa `httpx.post` tới Telegram API.
+- **CI/CD**: chưa có GitHub Actions workflow.
+- **FastAPI**: chưa khởi tạo Web API.
+- **SQLAlchemy ORM**: dự án dùng Supabase client trực tiếp.
+- **RAG / Vector DB**: chưa lên kế hoạch chi tiết.
