@@ -17,6 +17,8 @@ REDDIT_LIMIT: int = 5               # Số bài tối đa lấy từ Reddit
 REDDIT_SUBREDDIT: str = "ArtificialIntelligence"  # Tên subreddit ĐÚNG CHÍNH TẢ
 GOOGLE_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ Google News RSS
 REDDIT_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+REDDIT_OAUTH_TOKEN_URL: str = "https://www.reddit.com/api/v1/access_token"  # Endpoint lấy access token
+REDDIT_OAUTH_API_BASE: str = "https://oauth.reddit.com"  # API base khi đã xác thực OAuth
 
 # --- RETRY CONFIG ---
 GEMINI_RETRY_MAX: int = 3            # Số lần thử lại tối đa khi Gemini 503

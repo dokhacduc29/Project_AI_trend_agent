@@ -8,6 +8,7 @@ FIX LIST:
     - [OCP] Tự đăng ký vào Factory bằng decorator @AgentFactory.register
 =====================================================================
 """
+import os
 import httpx
 import asyncio
 import xml.etree.ElementTree as ET
@@ -76,10 +77,55 @@ class ScraperAgent(BaseAgent):
             return []
 
     async def _fetch_reddit(self, client: httpx.AsyncClient) -> list[Article]:
+        """
+        Ưu tiên OAuth (ổn định, không bị 403) nếu có REDDIT_CLIENT_ID/SECRET.
+        Không có credentials → fallback sang JSON công khai (có thể bị 403 → trả []).
+        """
+        client_id = os.getenv("REDDIT_CLIENT_ID")
+        client_secret = os.getenv("REDDIT_CLIENT_SECRET")
+
+        if client_id and client_secret:
+            token = await self._get_reddit_token(client, client_id, client_secret)
+            if token:
+                return await self._fetch_reddit_oauth(client, token)
+            self.log_warning("Lấy Reddit OAuth token thất bại → thử kênh công khai.")
+
+        return await self._fetch_reddit_public(client)
+
+    async def _get_reddit_token(self, client: httpx.AsyncClient, client_id: str, client_secret: str) -> str | None:
+        """Lấy access token qua luồng application-only OAuth (client_credentials)."""
+        try:
+            res = await client.post(
+                config.REDDIT_OAUTH_TOKEN_URL,
+                data={"grant_type": "client_credentials"},
+                auth=(client_id, client_secret),
+                headers={"User-Agent": config.REDDIT_USER_AGENT},
+                timeout=config.REQUEST_TIMEOUT,
+            )
+            res.raise_for_status()
+            return res.json().get("access_token")
+        except Exception as e:
+            self.log_error(f"Lỗi lấy Reddit OAuth token: {e}")
+            return None
+
+    async def _fetch_reddit_oauth(self, client: httpx.AsyncClient, token: str) -> list[Article]:
+        """Lấy bài qua endpoint oauth.reddit.com đã xác thực."""
+        url = f"{config.REDDIT_OAUTH_API_BASE}/r/{config.REDDIT_SUBREDDIT}/new?limit={config.REDDIT_LIMIT}"
         headers = {
+            "Authorization": f"bearer {token}",
             "User-Agent": config.REDDIT_USER_AGENT,
-            "Accept": "application/json",
         }
+        try:
+            res = await client.get(url, headers=headers, timeout=config.REQUEST_TIMEOUT)
+            res.raise_for_status()
+            return self._parse_reddit_posts(res.json()["data"]["children"])
+        except Exception as e:
+            self.log_error(f"Lỗi Reddit OAuth: {e}")
+            return []
+
+    async def _fetch_reddit_public(self, client: httpx.AsyncClient) -> list[Article]:
+        """Kênh công khai (không xác thực) — Reddit thường chặn 403, dùng làm fallback."""
+        headers = {"User-Agent": config.REDDIT_USER_AGENT, "Accept": "application/json"}
         urls = [
             f"https://www.reddit.com/r/{config.REDDIT_SUBREDDIT}/new.json?limit={config.REDDIT_LIMIT}",
             f"https://old.reddit.com/r/{config.REDDIT_SUBREDDIT}/new.json?limit={config.REDDIT_LIMIT}",
@@ -90,19 +136,24 @@ class ScraperAgent(BaseAgent):
                 if res.status_code == 403:
                     continue
                 res.raise_for_status()
-                posts = res.json()["data"]["children"]
-                return [
-                    Article(
-                        title=p["data"].get("title", ""),
-                        source="Reddit",
-                        date="N/A",
-                        url=f"https://www.reddit.com{p['data'].get('permalink', '')}",
-                    )
-                    for p in posts
-                ]
+                return self._parse_reddit_posts(res.json()["data"]["children"])
             except Exception as e:
                 self.log_error(f"Lỗi Reddit ({url}): {e}")
+        self.log_warning("Reddit chặn kênh công khai (403). Thêm REDDIT_CLIENT_ID/SECRET để dùng OAuth.")
         return []
+
+    @staticmethod
+    def _parse_reddit_posts(posts: list) -> list[Article]:
+        """Chuyển danh sách post JSON của Reddit thành Article."""
+        return [
+            Article(
+                title=p["data"].get("title", ""),
+                source="Reddit",
+                date="N/A",
+                url=f"https://www.reddit.com{p['data'].get('permalink', '')}",
+            )
+            for p in posts
+        ]
 
     async def _fetch_google_rss(self, client: httpx.AsyncClient, topic: str) -> list[Article]:
         url = f"https://news.google.com/rss/search?q={topic}&hl=en-US&gl=US&ceid=US:en"
