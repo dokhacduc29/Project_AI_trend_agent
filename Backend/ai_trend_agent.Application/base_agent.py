@@ -81,6 +81,9 @@ class BaseAgent(ABC):
     def log_info(self, message: str):
         self._logger.info(f"[{self.agent_name}] {message}")
 
+    def log_warning(self, message: str):
+        self._logger.warning(f"[{self.agent_name}] {message}")
+
     def log_error(self, message: str):
         self._logger.error(f"[{self.agent_name}] {message}")
 

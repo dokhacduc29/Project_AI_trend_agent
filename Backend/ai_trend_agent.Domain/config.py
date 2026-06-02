@@ -30,6 +30,18 @@ MAX_TOPIC_LENGTH: int = 50          # Độ dài tối đa từ khóa tìm kiế
 GEMINI_MODEL_NAME: str = "gemini-2.5-flash" # Mô hình tối ưu tốc độ/chi phí
 AI_MAX_ARTICLES_PER_BATCH: int = 15         # Số bài tối đa gửi AI mỗi lần để tránh quá tải
 
+# --- TREND SYNTHESIS CONFIG (PHASE A) ---
+TREND_MODEL_NAME: str = "gemini-2.5-flash"  # Mô hình dùng cho phân tích xu hướng
+TREND_MAX_ARTICLES: int = 30                # Số bài tối đa đưa vào prompt phân tích xu hướng
+TREND_MIN_ARTICLES: int = 3                 # Dưới ngưỡng này thì bỏ qua (không đủ để rút xu hướng)
+TREND_COUNT: int = 5                        # Số xu hướng tối đa AI cần rút ra
+
+# --- TELEGRAM CONFIG (PHASE 6) ---
+TELEGRAM_API_BASE: str = "https://api.telegram.org"  # Endpoint gốc Bot API
+TELEGRAM_MAX_MESSAGE_LENGTH: int = 4000  # Giới hạn an toàn (Telegram cap cứng 4096)
+TELEGRAM_PARSE_MODE: str = "HTML"        # HTML dễ escape hơn Markdown
+TELEGRAM_SEND_DELAY: float = 0.5         # Giây nghỉ giữa các chunk để tránh rate limit 429
+
 # --- STORAGE CONFIG ---
 OUTPUT_DIR: str = "data"             # Thư mục lưu file CSV
 CSV_FIELDNAMES: list[str] = ["STT", "Tieu_De", "Nguon", "Ngay", "Tags", "Tom_Tat", "Tam_Ly", "Link_Bai"]

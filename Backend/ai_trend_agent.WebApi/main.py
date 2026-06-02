@@ -40,6 +40,7 @@ import config
 import scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
 import cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
 import ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
+import trend_agent # noqa: F401 — side-effect import (đăng ký "trend" → phân tích xu hướng)
 import supabase_storage  # noqa: F401 — side-effect import (đăng ký "storage" → Supabase)
 import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram")
 
@@ -124,6 +125,7 @@ async def main():
         AgentFactory.create("scraper"),
         AgentFactory.create("cleaner"),
         AgentFactory.create("analyzer"), # [Phase 4] Tích hợp bộ não AI
+        AgentFactory.create("trend"),    # [Phase A] Phân tích xu hướng vĩ mô
         AgentFactory.create("storage"),
         AgentFactory.create("telegram"), # [Phase 6] Gửi thông báo Telegram
     ]
