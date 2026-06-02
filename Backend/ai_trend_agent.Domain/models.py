@@ -34,6 +34,7 @@ class Article:
     tags: list[str] = field(default_factory=list)
     summary: str = ""                     # [Phase 4] Nội dung tóm tắt từ AI
     sentiment: Sentiment = Sentiment.NEUTRAL # [Phase 4] Đánh giá tích cực/tiêu cực
+    relevance_score: int = -1             # [Phase B] Điểm liên quan 0-10 do AI chấm (-1 = chưa chấm)
 
     def __str__(self) -> str:
         tag_str = ", ".join(self.tags) if self.tags else "Chưa phân loại"

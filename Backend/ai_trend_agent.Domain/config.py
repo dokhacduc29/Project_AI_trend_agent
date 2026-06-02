@@ -30,6 +30,11 @@ MAX_TOPIC_LENGTH: int = 50          # Độ dài tối đa từ khóa tìm kiế
 GEMINI_MODEL_NAME: str = "gemini-2.5-flash" # Mô hình tối ưu tốc độ/chi phí
 AI_MAX_ARTICLES_PER_BATCH: int = 15         # Số bài tối đa gửi AI mỗi lần để tránh quá tải
 
+# --- AI CLEANER CONFIG (PHASE B) ---
+CLEANER_AI_MODEL: str = "gemini-2.5-flash"   # Model chấm điểm liên quan + gán tag
+CLEANER_RELEVANCE_THRESHOLD: int = 4         # Bài < ngưỡng này bị loại (lạc đề)
+CLEANER_AI_BATCH_SIZE: int = 30              # Số bài tối đa gửi AI mỗi chu kỳ
+
 # --- TREND SYNTHESIS CONFIG (PHASE A) ---
 TREND_MODEL_NAME: str = "gemini-2.5-flash"  # Mô hình dùng cho phân tích xu hướng
 TREND_MAX_ARTICLES: int = 30                # Số bài tối đa đưa vào prompt phân tích xu hướng
