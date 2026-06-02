@@ -163,11 +163,11 @@ class ScraperAgent(BaseAgent):
             root = ET.fromstring(res.text)
             articles = []
             for item in root.findall(".//item")[: config.GOOGLE_RSS_LIMIT]:
-                title = el.text if (el := item.find("title")) is not None else ""
-                link = el.text if (el := item.find("link")) is not None else ""
-                pub_date = el.text if (el := item.find("pubDate")) is not None else "N/A"
+                title = (el.text or "") if (el := item.find("title")) is not None else ""
+                link = (el.text or "") if (el := item.find("link")) is not None else ""
+                pub_date = (el.text or "N/A") if (el := item.find("pubDate")) is not None else "N/A"
                 source_el = item.find("source")
-                source = source_el.text if source_el is not None else "Google News RSS"
+                source = (source_el.text or "Google News RSS") if source_el is not None else "Google News RSS"
                 articles.append(Article(title=title, source=source, date=pub_date[:16], url=link))
             return articles
         except Exception as e:
