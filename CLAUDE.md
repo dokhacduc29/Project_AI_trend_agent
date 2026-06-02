@@ -33,7 +33,7 @@ AI_Trend_Agent/
 │   │   ├── cleaner.py           # CleanerAgent — regex tag + dedupe
 │   │   ├── ai_agent.py          # AIAnalyzerAgent — Gemini summary + sentiment
 │   │   ├── storage.py           # StorageAgent — CSV append (legacy fallback)
-│   │   ├── database_storage.py  # DatabaseStorageAgent — Supabase PostgreSQL
+│   │   ├── supabase_storage.py  # SupabaseStorageAgent — Supabase PostgreSQL
 │   │   └── telegram_agent.py    # TelegramAgent — stub (Phase 6)
 │   ├── ai_trend_agent.WebApi/
 │   │   └── main.py              # Orchestrator: asyncio.run(main()) → run_pipeline

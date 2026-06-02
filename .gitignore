@@ -20,9 +20,12 @@ __pycache__/
 *$py.class
 *.pyo
 
-# 4. FILE DỮ LIỆU TẠM: Dữ liệu CSV do Bot tạo ra (mỗi máy tự sinh)
+# 4. FILE DỮ LIỆU TẠM: Dữ liệu CSV/cache do Bot tạo ra (mỗi máy tự sinh)
+# Dùng **/ để bắt cả Backend/data/ chứ không chỉ data/ ở gốc repo
 data/*.csv
 data/*.json
+**/data/*.csv
+**/data/*.json
 
 # 5. IDE/EDITOR: File cấu hình riêng của từng máy
 .vscode/

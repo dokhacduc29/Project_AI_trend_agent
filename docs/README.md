@@ -38,7 +38,7 @@ WebApi/main.py (Orchestrator + AgentFactory)
     ├── ScraperAgent             →  Extract   (3 sources in parallel via asyncio.gather)
     ├── CleanerAgent             →  Transform (dedupe + regex tagging + sort)
     ├── SummarizationAgent       →  Analyze   (Gemini 2.5 Flash — batch + cache)
-    ├── DatabaseStorageAgent     →  Load      (Supabase PostgreSQL — Phase 5)
+    ├── SupabaseStorageAgent     →  Load      (Supabase PostgreSQL — Phase 5)
     └── TelegramAgent            →  Notify    (Telegram Bot — Phase 6, stub)
 ```
 
@@ -83,7 +83,7 @@ Project_AI_trend_agent/
 │   │   ├── cleaner.py                  # CleanerAgent — regex tagging + dedupe
 │   │   ├── ai_agent.py                 # SummarizationAgent — Gemini AI
 │   │   ├── storage.py                  # StorageAgent — CSV (legacy fallback)
-│   │   ├── database_storage.py         # DatabaseStorageAgent — Supabase
+│   │   ├── supabase_storage.py         # SupabaseStorageAgent — Supabase
 │   │   └── telegram_agent.py           # TelegramAgent — Bot notification (stub)
 │   │
 │   ├── ai_trend_agent.WebApi/
@@ -164,7 +164,7 @@ Enter a search topic (e.g., `Artificial Intelligence`), or set the `TOPIC` env v
 
 ## 🗄️ Database — Supabase PostgreSQL
 
-`DatabaseStorageAgent` stores articles into **Supabase PostgreSQL cloud** with this schema:
+`SupabaseStorageAgent` stores articles into **Supabase PostgreSQL cloud** with this schema:
 
 ```sql
 public.articles (
@@ -276,8 +276,8 @@ kubectl logs -f deployment/ai-trend-agent -n ai-trend-agent
 2026-05-18 15:00:05 - [INFO] - [SummarizationAgent] Đã phục hồi 3 bài từ Cache.
 2026-05-18 15:00:06 - [INFO] - [SummarizationAgent] Đang gửi 12 bài (3 batches) cho Gemini...
 2026-05-18 15:00:09 - [INFO] - [SummarizationAgent] Hoàn thành phân tích AI và cập nhật Cache.
-2026-05-18 15:00:09 - [INFO] - [DatabaseStorageAgent] Phát hiện 15 articles MỚI.
-2026-05-18 15:00:10 - [INFO] - [DatabaseStorageAgent] Đã insert thành công 15 articles vào Supabase.
+2026-05-18 15:00:09 - [INFO] - [SupabaseStorageAgent] Phát hiện 15 articles MỚI.
+2026-05-18 15:00:10 - [INFO] - [SupabaseStorageAgent] Đã insert thành công 15 articles vào Supabase.
 ```
 
 ---

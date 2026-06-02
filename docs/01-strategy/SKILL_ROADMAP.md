@@ -32,7 +32,7 @@
 
 ### Giai đoạn 5 — Tối ưu hóa & Triển khai (một phần)
 - Asyncio: `async/await` với `httpx`, cào 3 nguồn đồng thời qua `asyncio.gather`.
-- **Database:** Tích hợp Supabase PostgreSQL cloud (`DatabaseStorageAgent`).
+- **Database:** Tích hợp Supabase PostgreSQL cloud (`SupabaseStorageAgent`).
 - **Đóng gói:** Dockerfile multi-stage build, non-root user.
 - **Triển khai:** Kubernetes manifests, deploy thành công lên minikube local cluster.
 

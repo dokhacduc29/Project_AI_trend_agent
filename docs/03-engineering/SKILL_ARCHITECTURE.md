@@ -17,7 +17,7 @@ Mã nguồn tổ chức theo 4 lớp tách biệt trách nhiệm:
 ## Pipeline ETL (Aggregator + Factory)
 
 ```
-[ScraperAgent] → [CleanerAgent] → [AIAnalyzerAgent] → [DatabaseStorageAgent] → [TelegramAgent]
+[ScraperAgent] → [CleanerAgent] → [AIAnalyzerAgent] → [SupabaseStorageAgent] → [TelegramAgent]
        │              │                  │                      │                    │
        └──────────────────── PipelineContext (shared dataclass) ─────────────────────┘
 ```
@@ -72,12 +72,12 @@ class Article:
 | `CleanerAgent` | `cleaner` | Dedupe (Set O(1)) + regex tag + sort | `re` + `set()` |
 | `AIAnalyzerAgent` | `analyzer` | Summary + sentiment (batch) | `google-generativeai` (Gemini) |
 | `StorageAgent` | `storage` | Append CSV + analytics (legacy fallback) | `csv.DictWriter` + `defaultdict` |
-| `DatabaseStorageAgent` | `database_storage` | Insert Supabase + dedup + analytics | `supabase` client + `asyncio.to_thread` |
+| `SupabaseStorageAgent` | `storage` | Insert Supabase + dedup + analytics | `supabase` client + `asyncio.to_thread` |
 | `TelegramAgent` | `telegram` | Gửi thông báo *(stub — Phase 6)* | `httpx` *(chưa hoàn thiện)* |
 
 ## Lưu trữ (Storage)
 
-- **Chính:** `DatabaseStorageAgent` → Supabase PostgreSQL cloud.
+- **Chính:** `SupabaseStorageAgent` → Supabase PostgreSQL cloud.
   - Schema bảng `public.articles`: `id, title, source, date, tags, summary, sentiment, url`.
   - Dedup: query `title` đã tồn tại trước khi insert.
   - Supabase client đồng bộ → bọc trong `asyncio.to_thread()` để không block event loop.
@@ -125,4 +125,4 @@ class Article:
 ## Khi nào sửa kiến trúc
 
 - Thay đổi `BaseAgent`, `AgentFactory`, hoặc `PipelineContext` → ADR bắt buộc trong `knowledge/decisions/`.
-- Thêm publisher mới → tạo Agent sau `DatabaseStorageAgent`.
+- Thêm publisher mới → tạo Agent sau `SupabaseStorageAgent`.

@@ -34,6 +34,7 @@ class Article:
     tags: list[str] = field(default_factory=list)
     summary: str = ""                     # [Phase 4] Nội dung tóm tắt từ AI
     sentiment: Sentiment = Sentiment.NEUTRAL # [Phase 4] Đánh giá tích cực/tiêu cực
+    relevance_score: int = -1             # [Phase B] Điểm liên quan 0-10 do AI chấm (-1 = chưa chấm)
 
     def __str__(self) -> str:
         tag_str = ", ".join(self.tags) if self.tags else "Chưa phân loại"
@@ -49,6 +50,30 @@ class Article:
 
     def __hash__(self) -> int:
         return hash(self.title.lower())
+
+
+@dataclass
+class TrendReport:
+    """
+    [Phase A] Kết quả phân tích xu hướng XUYÊN SUỐT nhiều bài báo.
+
+    Khác với Article.summary (tóm tắt TỪNG bài), TrendReport tổng hợp
+    bức tranh lớn: các xu hướng đang nổi, tâm lý chung của thị trường.
+    """
+    trends: list[str] = field(default_factory=list)       # 3-5 xu hướng nổi (mỗi dòng 1 xu hướng)
+    overall_sentiment: Sentiment = Sentiment.NEUTRAL      # Tâm lý tổng quan
+    insight: str = ""                                     # Nhận định tổng quan 1-2 câu
+    generated: bool = False                               # True nếu AI đã sinh thành công
+
+    def __str__(self) -> str:
+        if not self.generated or not self.trends:
+            return "Chưa có phân tích xu hướng."
+        lines = [f"- {t}" for t in self.trends]
+        return (
+            f"Tâm lý chung: {self.overall_sentiment.value}\n"
+            + "\n".join(lines)
+            + (f"\nNhận định: {self.insight}" if self.insight else "")
+        )
 
 
 @dataclass
@@ -68,3 +93,4 @@ class PipelineContext:
     api_key: str = ""          # NewsAPI key
     gemini_api_key: str = ""   # [Phase 4] Gemini API key
     articles: list[Article] = field(default_factory=list)
+    trend_report: "TrendReport" = field(default_factory=lambda: TrendReport())  # [Phase A] Phân tích xu hướng

@@ -13,11 +13,11 @@ import os
 import json
 import asyncio
 import hashlib
-import google.generativeai as genai
-from google.generativeai.types import generation_types
+from google import genai
 
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext, Sentiment, Article
+from gemini_client import generate_with_retry
 import config
 from decorators import ai_timer, ai_logger
 
@@ -28,14 +28,13 @@ class SummarizationAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__("SummarizationAgent")
-        self._model = None
+        self._client: genai.Client | None = None
         self._cache_file = os.path.join(config.OUTPUT_DIR, ".ai_cache.json")
         self._cache = self._load_cache()
 
     def _setup_gemini(self, api_key: str):
         """Cấu hình Gemini API."""
-        genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(config.GEMINI_MODEL_NAME)
+        self._client = genai.Client(api_key=api_key)
 
     def _get_cache_key(self, title: str) -> str:
         """Chiến lược 3: Hàm băm (Hash) để tạo khóa cho Cache."""
@@ -80,12 +79,14 @@ class SummarizationAgent(BaseAgent):
             f"{articles_text}"
         )
         
-        try:
-            response = await self._model.generate_content_async(prompt)
-            return response.text
-        except Exception as e:
-            self.log_error(f"Lỗi khi gọi Gemini: {e}")
-            return "[]"
+        assert self._client is not None, "_setup_gemini() phải được gọi trước _analyze_batch()"
+        return await generate_with_retry(
+            self._client,
+            config.GEMINI_MODEL_NAME,
+            prompt,
+            log_error=self.log_error,
+            fallback="[]",
+        )
 
     def _parse_batch_response(self, response_text: str, articles_batch: list[Article]):
         """Phân tích kết quả JSON trả về từ AI thành dữ liệu Article."""
@@ -171,14 +172,13 @@ class SummarizationAgent(BaseAgent):
             return ctx
 
         # -------------------------------------------------------------
-        # CHIẾN LƯỢC 2: Pre-filter (Chỉ gửi AI các bài báo đã có Tag)
+        # CHIẾN LƯỢC 2: Giới hạn số bài gửi AI mỗi lần (tránh rate limit)
         # -------------------------------------------------------------
-        articles_with_tags = [a for a in articles_to_process if a.tags]
-        articles_to_analyze = articles_with_tags[:config.AI_MAX_ARTICLES_PER_BATCH]
-        
+        articles_to_analyze = articles_to_process[:config.AI_MAX_ARTICLES_PER_BATCH]
+
         ignored_count = len(articles_to_process) - len(articles_to_analyze)
         if ignored_count > 0:
-            self.log_info(f"Bỏ qua {ignored_count} bài (không có tag hoặc vượt limit).")
+            self.log_info(f"Bỏ qua {ignored_count} bài (vượt limit {config.AI_MAX_ARTICLES_PER_BATCH}).")
 
         if not articles_to_analyze:
             self.log_info("Không còn bài báo quan trọng nào cần gửi cho AI.")
