@@ -1,4 +1,4 @@
-# 🤖 AI Trend Agent v3.1 — SOLID Edition
+# 🤖 AI Trend Agent v4.0 — SOLID Edition
 
 > An automated pipeline that scrapes, AI-cleans (relevance scoring), tags, AI-summarizes, synthesizes macro trends, stores into a cloud database, and pushes a digest to Telegram — built with async Python, OOP, SOLID principles, and Gemini AI.
 
