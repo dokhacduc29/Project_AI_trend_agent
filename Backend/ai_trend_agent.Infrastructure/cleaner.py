@@ -17,11 +17,10 @@ L09 no magic numbers (→ config.py).
 """
 import re
 import json
-import random
-import asyncio
 from google import genai
 from base_agent import BaseAgent, AgentFactory
 from models import Article, PipelineContext
+from gemini_client import generate_with_retry
 import config
 
 
@@ -100,27 +99,15 @@ class CleanerAgent(BaseAgent):
         )
 
     async def _call_gemini(self, prompt: str) -> str:
-        """Gọi Gemini với retry exponential backoff. Lỗi → trả '[]'."""
+        """Gọi Gemini qua helper chung (retry backoff). Lỗi → '[]'."""
         assert self._client is not None, "_setup_gemini() phải được gọi trước"
-        delay = config.GEMINI_RETRY_BASE_DELAY
-        for attempt in range(1, config.GEMINI_RETRY_MAX + 1):
-            try:
-                response = await self._client.aio.models.generate_content(
-                    model=config.CLEANER_AI_MODEL,
-                    contents=prompt,
-                )
-                return response.text or "[]"
-            except Exception as e:
-                is_retryable = any(c in str(e) for c in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
-                if is_retryable and attempt < config.GEMINI_RETRY_MAX:
-                    wait = delay + random.uniform(0, delay * 0.3)
-                    self.log_error(f"Lỗi gọi Gemini (lần {attempt}): {e} — thử lại sau {wait:.1f}s")
-                    await asyncio.sleep(wait)
-                    delay *= 2
-                else:
-                    self.log_error(f"Lỗi gọi Gemini: {e}")
-                    return "[]"
-        return "[]"
+        return await generate_with_retry(
+            self._client,
+            config.CLEANER_AI_MODEL,
+            prompt,
+            log_error=self.log_error,
+            fallback="[]",
+        )
 
     @staticmethod
     def _normalize_tag(tag: str) -> str:

@@ -17,11 +17,10 @@ Khác biệt cốt lõi với SummarizationAgent:
 =====================================================================
 """
 import json
-import random
-import asyncio
 from google import genai
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext, TrendReport, Sentiment, Article
+from gemini_client import generate_with_retry
 import config
 from decorators import ai_timer, ai_logger
 
@@ -62,27 +61,15 @@ class TrendSynthesisAgent(BaseAgent):
     @ai_logger
     @ai_timer
     async def _call_gemini(self, prompt: str) -> str:
-        """Gọi Gemini với retry exponential backoff (tái dùng pattern của analyzer)."""
+        """Gọi Gemini qua helper chung (retry backoff). Lỗi → '{}'."""
         assert self._client is not None, "_setup_gemini() phải được gọi trước _call_gemini()"
-        delay = config.GEMINI_RETRY_BASE_DELAY
-        for attempt in range(1, config.GEMINI_RETRY_MAX + 1):
-            try:
-                response = await self._client.aio.models.generate_content(
-                    model=config.TREND_MODEL_NAME,
-                    contents=prompt,
-                )
-                return response.text or "{}"
-            except Exception as e:
-                is_retryable = any(code in str(e) for code in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
-                if is_retryable and attempt < config.GEMINI_RETRY_MAX:
-                    wait = delay + random.uniform(0, delay * 0.3)
-                    self.log_error(f"Lỗi gọi Gemini (lần {attempt}): {e} — thử lại sau {wait:.1f}s")
-                    await asyncio.sleep(wait)
-                    delay *= 2
-                else:
-                    self.log_error(f"Lỗi gọi Gemini: {e}")
-                    return "{}"
-        return "{}"
+        return await generate_with_retry(
+            self._client,
+            config.TREND_MODEL_NAME,
+            prompt,
+            log_error=self.log_error,
+            fallback="{}",
+        )
 
     def _parse_response(self, raw: str) -> TrendReport:
         """Chuyển JSON từ AI thành TrendReport. Lỗi → report rỗng (generated=False)."""

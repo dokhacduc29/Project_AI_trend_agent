@@ -13,12 +13,11 @@ import os
 import json
 import asyncio
 import hashlib
-import random
 from google import genai
-from google.genai import types as genai_types
 
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext, Sentiment, Article
+from gemini_client import generate_with_retry
 import config
 from decorators import ai_timer, ai_logger
 
@@ -81,26 +80,13 @@ class SummarizationAgent(BaseAgent):
         )
         
         assert self._client is not None, "_setup_gemini() phải được gọi trước _analyze_batch()"
-        delay = config.GEMINI_RETRY_BASE_DELAY
-        for attempt in range(1, config.GEMINI_RETRY_MAX + 1):
-            try:
-                response = await self._client.aio.models.generate_content(
-                    model=config.GEMINI_MODEL_NAME,
-                    contents=prompt,
-                )
-                return response.text or "[]"
-            except Exception as e:
-                is_retryable = any(code in str(e) for code in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
-                if is_retryable and attempt < config.GEMINI_RETRY_MAX:
-                    jitter = random.uniform(0, delay * 0.3)
-                    wait = delay + jitter
-                    self.log_error(f"Lỗi khi gọi Gemini (lần {attempt}): {e} — thử lại sau {wait:.1f}s")
-                    await asyncio.sleep(wait)
-                    delay *= 2
-                else:
-                    self.log_error(f"Lỗi khi gọi Gemini: {e}")
-                    return "[]"
-        return "[]"
+        return await generate_with_retry(
+            self._client,
+            config.GEMINI_MODEL_NAME,
+            prompt,
+            log_error=self.log_error,
+            fallback="[]",
+        )
 
     def _parse_batch_response(self, response_text: str, articles_batch: list[Article]):
         """Phân tích kết quả JSON trả về từ AI thành dữ liệu Article."""
