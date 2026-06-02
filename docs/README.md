@@ -1,6 +1,6 @@
 # 🤖 AI Trend Agent v3.1 — SOLID Edition
 
-> An automated pipeline that scrapes, cleans, tags, AI-summarizes, and stores trending AI news from multiple sources into a cloud database — built with async Python, OOP, SOLID principles, and Gemini AI.
+> An automated pipeline that scrapes, AI-cleans (relevance scoring), tags, AI-summarizes, synthesizes macro trends, stores into a cloud database, and pushes a digest to Telegram — built with async Python, OOP, SOLID principles, and Gemini AI.
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture%20%2B%20SOLID-green)
@@ -19,29 +19,32 @@ AI Trend Agent automatically monitors and collects the latest AI news from **3 s
 | Source | Method | Format |
 |--------|--------|--------|
 | **NewsAPI** | REST API | JSON |
-| **Reddit** (`r/artificial`) | Reddit JSON API | JSON |
+| **Reddit** (`r/ArtificialIntelligence`) | OAuth API (fallback public JSON) | JSON |
 | **Google News** | RSS Feed | XML |
 
-The pipeline runs on a schedule (default: every 4 hours): collecting, deduplicating, auto-tagging, AI-summarizing with Gemini, and storing articles into a **Supabase PostgreSQL cloud database**.
+The pipeline runs on a schedule (default: every 4 hours): collecting, deduplicating, hybrid AI-cleaning (regex + Gemini relevance scoring), AI-summarizing, synthesizing macro trends, storing into a **Supabase PostgreSQL cloud database**, and sending a formatted **Telegram digest**.
 
 ---
 
 ## 🏗️ Architecture
 
-The project follows **Clean Architecture** with 5 pipeline agents connected via `PipelineContext`:
+The project follows **Clean Architecture** with 6 pipeline agents connected via `PipelineContext`:
 
 ```
 WebApi/main.py (Orchestrator + AgentFactory)
     │
-    ├── PipelineContext          ← Shared data object passed between every Agent
+    ├── PipelineContext          ← Shared data object (articles + trend_report) passed between every Agent
     │
     ├── ScraperAgent             →  Extract   (3 sources in parallel via asyncio.gather)
-    ├── CleanerAgent             →  Transform (dedupe + regex tagging + sort)
-    ├── SummarizationAgent       →  Analyze   (Gemini 2.5 Flash — batch + cache)
+    ├── CleanerAgent             →  Transform (dedupe + hybrid regex/AI tagging + relevance filter)  [Phase B]
+    ├── SummarizationAgent       →  Analyze   (Gemini 2.5 Flash — per-article summary + sentiment, batch + cache)
+    ├── TrendSynthesisAgent      →  Synthesize(Gemini — macro trends across all articles)            [Phase A]
     ├── SupabaseStorageAgent     →  Load      (Supabase PostgreSQL — Phase 5)
-    └── TelegramAgent            →  Notify    (Telegram Bot — Phase 6, stub)
+    └── TelegramAgent            →  Notify    (Telegram digest: trends + articles — Phase 6)
 ```
 
+> Shared `gemini_client.generate_with_retry()` helper centralizes Gemini calls (exponential backoff for 503/429) used by the Cleaner, Summarization, and Trend agents.
+>
 > `StorageAgent` (CSV append-only writer with threading) still exists as a legacy fallback but is not part of the default pipeline.
 
 ### SOLID Principles Applied
@@ -79,12 +82,14 @@ Project_AI_trend_agent/
 │   │   └── decorators.py               # @retry, @ai_timer, @ai_logger
 │   │
 │   ├── ai_trend_agent.Infrastructure/  # Concrete implementations
-│   │   ├── scrapers.py                 # ScraperAgent — async multi-source
-│   │   ├── cleaner.py                  # CleanerAgent — regex tagging + dedupe
-│   │   ├── ai_agent.py                 # SummarizationAgent — Gemini AI
+│   │   ├── scrapers.py                 # ScraperAgent — async multi-source (Reddit OAuth)
+│   │   ├── cleaner.py                  # CleanerAgent — hybrid regex + AI relevance [Phase B]
+│   │   ├── ai_agent.py                 # SummarizationAgent — Gemini summary + sentiment
+│   │   ├── trend_agent.py             # TrendSynthesisAgent — macro trends [Phase A]
+│   │   ├── gemini_client.py            # Shared Gemini call helper (retry backoff)
 │   │   ├── storage.py                  # StorageAgent — CSV (legacy fallback)
 │   │   ├── supabase_storage.py         # SupabaseStorageAgent — Supabase
-│   │   └── telegram_agent.py           # TelegramAgent — Bot notification (stub)
+│   │   └── telegram_agent.py           # TelegramAgent — Bot digest (trends + articles)
 │   │
 │   ├── ai_trend_agent.WebApi/
 │   │   └── main.py                     # Entry point — pipeline orchestrator
@@ -102,6 +107,9 @@ Project_AI_trend_agent/
 ├── .claude/                            # Claude Code skills & commands
 │   ├── commands/                       # Slash commands (bugfix, deploy, tdd...)
 │   └── skills/                         # Architecture guide, coding rules, roadmap
+│
+├── knowledge/                          # Architecture Decision Records (ADR)
+│   └── decisions/                      # 0001 Trend Synthesis, 0002 Hybrid Cleaner
 │
 └── docs/                               # Project documentation
     ├── 01-strategy/                    # Roadmap & planning
@@ -140,8 +148,10 @@ pip install -r Backend/requirements.txt
 #    GEMINI_API_KEY=your_gemini_key
 #    SUPABASE_URL=your_supabase_url
 #    SUPABASE_KEY=your_supabase_anon_key
-#    TELEGRAM_BOT_TOKEN=your_bot_token   (optional — Phase 6)
-#    TELEGRAM_CHAT_ID=your_chat_id       (optional — Phase 6)
+#    TELEGRAM_BOT_TOKEN=your_bot_token       (optional — Phase 6)
+#    TELEGRAM_CHAT_ID=your_chat_id           (optional — Phase 6)
+#    REDDIT_CLIENT_ID=your_reddit_client_id  (optional — fixes Reddit 403 via OAuth)
+#    REDDIT_CLIENT_SECRET=your_reddit_secret (optional — create a "script" app at reddit.com/prefs/apps)
 ```
 
 ### Run
@@ -153,11 +163,11 @@ python Backend/ai_trend_agent.WebApi/main.py
 Enter a search topic (e.g., `Artificial Intelligence`), or set the `TOPIC` env var for container mode. The pipeline will:
 
 1. **Scrape** all 3 sources **in parallel** via `asyncio.gather()`
-2. **Clean** — drop empty titles, normalize text
-3. **Tag** — Regex NLP auto-tags entities (`#OpenAI`, `#Google`...)
-4. **Deduplicate** — Set lookup O(1), sort by date (Timsort O(N log N))
-5. **Analyze** — Gemini 2.5 Flash summarizes + scores sentiment (bullish/bearish/neutral)
-6. **Store** — insert new articles into Supabase (server-side dedup by title)
+2. **Clean (hybrid)** — drop empty titles, dedupe (Set O(1) + Timsort), regex tags, then **Gemini relevance scoring (0–10)** drops off-topic articles and fills missing tags [Phase B]
+3. **Analyze** — Gemini 2.5 Flash summarizes + scores sentiment (bullish/bearish/neutral) per article
+4. **Synthesize trends** — Gemini reads all articles → 3–5 macro trends + overall sentiment + insight [Phase A]
+5. **Store** — upsert new articles into Supabase (`on_conflict=url`)
+6. **Notify** — send a Telegram digest (trends on top + article list, auto-chunked ≤4096 chars)
 7. **Repeat** every 4 hours — stop gracefully with `Ctrl + C`
 
 ---
@@ -182,10 +192,9 @@ public.articles (
 ```
 
 **Features:**
-- **Dedup query** — checks existing titles before insert to avoid duplicates
+- **Upsert dedup** — `upsert(on_conflict="url", ignore_duplicates=True)` lets the DB's `url` UNIQUE constraint skip duplicates atomically (no pre-query needed)
 - **Async-safe** — uses `asyncio.to_thread()` so the sync Supabase client never blocks the event loop
-- **Fault tolerance** — validates `SUPABASE_URL` / `SUPABASE_KEY` from `.env` on init
-- **Analytics** — source + tag statistics, same as the CSV agent
+- **Fault tolerance** — reads `SUPABASE_URL` / `SUPABASE_KEY` from `.env` (lazy client init); errors are logged, pipeline continues
 
 ---
 
@@ -205,9 +214,11 @@ Per-article output:
 
 ---
 
-## 🏷️ Auto-Tagging (Regex NLP)
+## 🏷️ Hybrid Cleaner — Regex + AI (Phase B)
 
-`CleanerAgent` automatically tags articles based on title content:
+`CleanerAgent` runs **two tiers** so the free regex pass handles the easy cases and Gemini only fills the gaps:
+
+**Tier 1 — Regex (free, fast):** dedupe + tag clear entities.
 
 | Pattern | Tag |
 |---------|-----|
@@ -218,6 +229,23 @@ Per-article output:
 | Anthropic, Claude | `#Anthropic` |
 | Apple | `#Apple` |
 | `$100M`, `$2B`... | `#Funding_Money` |
+
+**Tier 2 — AI (Gemini, only when `GEMINI_API_KEY` is set):**
+- Scores **relevance 0–10** for every article → drops off-topic ones below the threshold (fixes regex false positives like a "best apple pie recipe" → `#Apple`)
+- Tags articles that regex couldn't recognize (new entities like Mistral, xAI)
+- **Graceful fallback** — if quota runs out or the call fails, the regex result is used (pipeline never breaks)
+
+---
+
+## 🔮 Trend Synthesis (Phase A)
+
+While `SummarizationAgent` summarizes **each** article (micro view), `TrendSynthesisAgent` reads **all** articles in one Gemini call to produce the macro picture:
+
+- **3–5 emerging trends** (each with related-article count)
+- **Overall market sentiment** (bullish / bearish / neutral)
+- **One-line insight**
+
+The result (`PipelineContext.trend_report`) is placed at the **top of the Telegram digest** so the big picture comes first.
 
 ---
 
@@ -270,14 +298,14 @@ kubectl logs -f deployment/ai-trend-agent -n ai-trend-agent
 ## 📊 Sample Output
 
 ```
-2026-05-18 15:00:01 - [INFO] - [ScraperAgent] Bắt đầu cào tin về: 'Artificial Intelligence'
-2026-05-18 15:00:03 - [INFO] - [ScraperAgent] Thu thập xong: 20 bài thô
-2026-05-18 15:00:03 - [INFO] - [CleanerAgent] Lọc xong: 15 bài sạch, độc nhất
-2026-05-18 15:00:05 - [INFO] - [SummarizationAgent] Đã phục hồi 3 bài từ Cache.
-2026-05-18 15:00:06 - [INFO] - [SummarizationAgent] Đang gửi 12 bài (3 batches) cho Gemini...
-2026-05-18 15:00:09 - [INFO] - [SummarizationAgent] Hoàn thành phân tích AI và cập nhật Cache.
-2026-05-18 15:00:09 - [INFO] - [SupabaseStorageAgent] Phát hiện 15 articles MỚI.
-2026-05-18 15:00:10 - [INFO] - [SupabaseStorageAgent] Đã insert thành công 15 articles vào Supabase.
+2026-06-02 16:24:46 - [INFO] - [ScraperAgent] Thu thập xong: 11 bài thô
+2026-06-02 16:24:47 - [INFO] - [CleanerAgent] Tầng regex: 11 bài sạch, độc nhất.
+2026-06-02 16:24:56 - [INFO] - [CleanerAgent] Tầng AI: loại 1 bài lạc đề (điểm < 4).
+2026-06-02 16:24:56 - [INFO] - [SummarizationAgent] Đang gửi 10 bài (2 batches) cho Gemini...
+2026-06-02 16:25:02 - [INFO] - [SummarizationAgent] Hoàn thành phân tích AI và cập nhật Cache.
+2026-06-02 16:25:13 - [INFO] - [TrendSynthesisAgent] Đã rút ra 4 xu hướng nổi bật.
+2026-06-02 16:25:15 - [INFO] - [SupabaseStorageAgent] Đã lưu thành công 8 bài mới vào Supabase.
+2026-06-02 16:25:17 - [INFO] - [TelegramAgent] Đã gửi thành công 2/2 tin nhắn qua Telegram.
 ```
 
 ---
@@ -293,6 +321,7 @@ kubectl logs -f deployment/ai-trend-agent -n ai-trend-agent
 | L07 | Fault tolerance | Every external call has `timeout` + `try/except` | ✅ |
 | L08 | Type hints + docstring | Required on every function | ✅ |
 | L09 | No magic numbers | All constants → `config.py` | ✅ |
+| L10 | Decision log | Major changes recorded as ADRs in `knowledge/decisions/` | ✅ |
 
 ---
 
@@ -320,9 +349,13 @@ Current test coverage:
 | 4 | Gemini AI: summarization + sentiment + FinOps | ✅ Done |
 | 5 | Database storage: Supabase PostgreSQL cloud | ✅ Done |
 | Deploy | Docker multi-stage build + Kubernetes (minikube) | ✅ Done |
-| 6 | Multi-channel publisher: Telegram Bot | ⏳ Planned (stub) |
+| 6 | Multi-channel publisher: Telegram digest (trends + articles) | ✅ Done |
+| **A** | **AI Trend Synthesis** — macro trends across all articles (ADR 0001) | ✅ Done |
+| **B** | **Hybrid AI Cleaner** — regex + Gemini relevance scoring (ADR 0002) | ✅ Done |
+| Infra | Reddit OAuth fix + shared Gemini retry helper | ✅ Done |
 | CI/CD | GitHub Actions: build → test → scan → deploy | ⏳ Planned |
-| 7 | RAG chatbot, full-text extraction | ⏳ Planned |
+| C | RAG chatbot / Q&A over collected articles | ⏳ Planned |
+| D | Agentic loop — LLM self-directed search & tool use | ⏳ Planned |
 
 ---
 
