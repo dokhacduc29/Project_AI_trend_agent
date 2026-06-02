@@ -16,7 +16,11 @@ NEWSAPI_PAGE_SIZE: int = 10          # Số bài tối đa lấy từ NewsAPI m�
 REDDIT_LIMIT: int = 5               # Số bài tối đa lấy từ Reddit
 REDDIT_SUBREDDIT: str = "ArtificialIntelligence"  # Tên subreddit ĐÚNG CHÍNH TẢ
 GOOGLE_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ Google News RSS
-REDDIT_USER_AGENT: str = "AI-Trend-Agent-V3-OOP"
+REDDIT_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+
+# --- RETRY CONFIG ---
+GEMINI_RETRY_MAX: int = 3            # Số lần thử lại tối đa khi Gemini 503
+GEMINI_RETRY_BASE_DELAY: float = 2.0 # Delay ban đầu (giây), tăng gấp đôi mỗi lần
 
 # --- PIPELINE CONFIG ---
 SCHEDULE_INTERVAL_HOURS: int = 4    # Chu kỳ quét tự động (giờ)

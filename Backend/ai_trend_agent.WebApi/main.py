@@ -40,7 +40,7 @@ import config
 import scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
 import cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
 import ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
-import storage    # noqa: F401 — side-effect import (đăng ký "storage")
+import supabase_storage  # noqa: F401 — side-effect import (đăng ký "storage" → Supabase)
 import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram")
 
 

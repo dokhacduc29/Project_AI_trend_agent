@@ -1,0 +1,38 @@
+# =====================================================================
+# .gitignore — Danh sách file/thư mục BỊ CẤM đưa lên GitHub
+# =====================================================================
+# TẠI SAO CẦN FILE NÀY?
+# Nếu không có .gitignore, Git sẽ đẩy TOÀN BỘ file lên GitHub,
+# bao gồm cả file .env chứa API Key bí mật của bạn.
+# Hacker sẽ lấy key đó đi xài miễn phí hoặc tệ hơn là phá hoại tài khoản.
+
+# 1. BẢO MẬT: Không bao giờ đẩy file chứa mật khẩu / API Key
+.env
+
+# 2. MÔI TRƯỜNG ẢO: Thư mục venv chứa hàng nghìn file thư viện (rất nặng)
+# Người khác clone repo về sẽ tự chạy `pip install -r requirements.txt`
+venv/
+.venv/
+
+# 3. CACHE PYTHON: File biên dịch tạm, không cần lưu trữ
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# 4. FILE DỮ LIỆU TẠM: Dữ liệu CSV do Bot tạo ra (mỗi máy tự sinh)
+data/*.csv
+data/*.json
+
+# 5. IDE/EDITOR: File cấu hình riêng của từng máy
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 6. HỆ ĐIỀU HÀNH: File rác của Windows/Mac
+Thumbs.db
+.DS_Store
+
+# 7. AI AGENT LOCAL BRAIN: Giữ lại trên GitHub vì đây là tài liệu dự án
+# .agents/   ← KHÔNG bỏ vào gitignore vì muốn chia sẻ quy tắc code

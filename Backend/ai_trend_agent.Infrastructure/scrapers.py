@@ -76,24 +76,33 @@ class ScraperAgent(BaseAgent):
             return []
 
     async def _fetch_reddit(self, client: httpx.AsyncClient) -> list[Article]:
-        headers = {"User-Agent": config.REDDIT_USER_AGENT}
-        url = f"https://www.reddit.com/r/{config.REDDIT_SUBREDDIT}/new.json?limit={config.REDDIT_LIMIT}"
-        try:
-            res = await client.get(url, headers=headers, timeout=config.REQUEST_TIMEOUT)
-            res.raise_for_status()
-            posts = res.json()["data"]["children"]
-            return [
-                Article(
-                    title=p["data"].get("title", ""),
-                    source="Reddit",
-                    date="N/A",
-                    url=f"https://www.reddit.com{p['data'].get('permalink', '')}",
-                )
-                for p in posts
-            ]
-        except Exception as e:
-            self.log_error(f"Lỗi Reddit: {e}")
-            return []
+        headers = {
+            "User-Agent": config.REDDIT_USER_AGENT,
+            "Accept": "application/json",
+        }
+        urls = [
+            f"https://www.reddit.com/r/{config.REDDIT_SUBREDDIT}/new.json?limit={config.REDDIT_LIMIT}",
+            f"https://old.reddit.com/r/{config.REDDIT_SUBREDDIT}/new.json?limit={config.REDDIT_LIMIT}",
+        ]
+        for url in urls:
+            try:
+                res = await client.get(url, headers=headers, timeout=config.REQUEST_TIMEOUT)
+                if res.status_code == 403:
+                    continue
+                res.raise_for_status()
+                posts = res.json()["data"]["children"]
+                return [
+                    Article(
+                        title=p["data"].get("title", ""),
+                        source="Reddit",
+                        date="N/A",
+                        url=f"https://www.reddit.com{p['data'].get('permalink', '')}",
+                    )
+                    for p in posts
+                ]
+            except Exception as e:
+                self.log_error(f"Lỗi Reddit ({url}): {e}")
+        return []
 
     async def _fetch_google_rss(self, client: httpx.AsyncClient, topic: str) -> list[Article]:
         url = f"https://news.google.com/rss/search?q={topic}&hl=en-US&gl=US&ceid=US:en"
@@ -103,9 +112,9 @@ class ScraperAgent(BaseAgent):
             root = ET.fromstring(res.text)
             articles = []
             for item in root.findall(".//item")[: config.GOOGLE_RSS_LIMIT]:
-                title = item.find("title").text if item.find("title") is not None else ""
-                link = item.find("link").text if item.find("link") is not None else ""
-                pub_date = item.find("pubDate").text if item.find("pubDate") is not None else "N/A"
+                title = el.text if (el := item.find("title")) is not None else ""
+                link = el.text if (el := item.find("link")) is not None else ""
+                pub_date = el.text if (el := item.find("pubDate")) is not None else "N/A"
                 source_el = item.find("source")
                 source = source_el.text if source_el is not None else "Google News RSS"
                 articles.append(Article(title=title, source=source, date=pub_date[:16], url=link))

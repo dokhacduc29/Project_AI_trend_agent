@@ -13,8 +13,9 @@ import os
 import json
 import asyncio
 import hashlib
-import google.generativeai as genai
-from google.generativeai.types import generation_types
+import random
+from google import genai
+from google.genai import types as genai_types
 
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext, Sentiment, Article
@@ -28,14 +29,13 @@ class SummarizationAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__("SummarizationAgent")
-        self._model = None
+        self._client: genai.Client | None = None
         self._cache_file = os.path.join(config.OUTPUT_DIR, ".ai_cache.json")
         self._cache = self._load_cache()
 
     def _setup_gemini(self, api_key: str):
         """Cấu hình Gemini API."""
-        genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(config.GEMINI_MODEL_NAME)
+        self._client = genai.Client(api_key=api_key)
 
     def _get_cache_key(self, title: str) -> str:
         """Chiến lược 3: Hàm băm (Hash) để tạo khóa cho Cache."""
@@ -80,12 +80,27 @@ class SummarizationAgent(BaseAgent):
             f"{articles_text}"
         )
         
-        try:
-            response = await self._model.generate_content_async(prompt)
-            return response.text
-        except Exception as e:
-            self.log_error(f"Lỗi khi gọi Gemini: {e}")
-            return "[]"
+        assert self._client is not None, "_setup_gemini() phải được gọi trước _analyze_batch()"
+        delay = config.GEMINI_RETRY_BASE_DELAY
+        for attempt in range(1, config.GEMINI_RETRY_MAX + 1):
+            try:
+                response = await self._client.aio.models.generate_content(
+                    model=config.GEMINI_MODEL_NAME,
+                    contents=prompt,
+                )
+                return response.text or "[]"
+            except Exception as e:
+                is_retryable = any(code in str(e) for code in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
+                if is_retryable and attempt < config.GEMINI_RETRY_MAX:
+                    jitter = random.uniform(0, delay * 0.3)
+                    wait = delay + jitter
+                    self.log_error(f"Lỗi khi gọi Gemini (lần {attempt}): {e} — thử lại sau {wait:.1f}s")
+                    await asyncio.sleep(wait)
+                    delay *= 2
+                else:
+                    self.log_error(f"Lỗi khi gọi Gemini: {e}")
+                    return "[]"
+        return "[]"
 
     def _parse_batch_response(self, response_text: str, articles_batch: list[Article]):
         """Phân tích kết quả JSON trả về từ AI thành dữ liệu Article."""
@@ -171,14 +186,13 @@ class SummarizationAgent(BaseAgent):
             return ctx
 
         # -------------------------------------------------------------
-        # CHIẾN LƯỢC 2: Pre-filter (Chỉ gửi AI các bài báo đã có Tag)
+        # CHIẾN LƯỢC 2: Giới hạn số bài gửi AI mỗi lần (tránh rate limit)
         # -------------------------------------------------------------
-        articles_with_tags = [a for a in articles_to_process if a.tags]
-        articles_to_analyze = articles_with_tags[:config.AI_MAX_ARTICLES_PER_BATCH]
-        
+        articles_to_analyze = articles_to_process[:config.AI_MAX_ARTICLES_PER_BATCH]
+
         ignored_count = len(articles_to_process) - len(articles_to_analyze)
         if ignored_count > 0:
-            self.log_info(f"Bỏ qua {ignored_count} bài (không có tag hoặc vượt limit).")
+            self.log_info(f"Bỏ qua {ignored_count} bài (vượt limit {config.AI_MAX_ARTICLES_PER_BATCH}).")
 
         if not articles_to_analyze:
             self.log_info("Không còn bài báo quan trọng nào cần gửi cho AI.")

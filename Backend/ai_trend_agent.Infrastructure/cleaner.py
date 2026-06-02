@@ -35,6 +35,10 @@ class CleanerAgent(BaseAgent):
             (r'\b(meta|llama|zuckerberg)\b', "#Meta"),
             (r'\b(anthropic|claude)\b', "#Anthropic"),
             (r'\bapple\b', "#Apple"),
+            (r'\b(tesla|elon.?musk|cybertruck|autopilot)\b', "#Tesla"),
+            (r'\b(nvidia|amd|intel|chip|gpu|semiconductor)\b', "#Hardware"),
+            (r'\b(robot|robotics|humanoid|boston.?dynamics)\b', "#Robotics"),
+            (r'\b(startup|funding|invest|raised|valuation|ipo)\b', "#Startup"),
             (r'\$[\d]+[MB]?', "#Funding_Money"),
         ]
         for pattern, tag in entity_patterns:
