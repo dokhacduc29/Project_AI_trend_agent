@@ -1,0 +1,45 @@
+# ── Git & IDE ──────────────────────────────────
+.git
+.gitignore
+.vscode
+.claude
+*.md
+
+# ── Python artifacts ───────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────
+venv/
+.venv/
+env/
+
+# ── Test & Dev files ───────────────────────────
+Backend/ai_trend_agent.Tests/
+Backend/quick_test.py
+Backend/test_supabase_connection.py
+
+# ── Secrets (QUAN TRỌNG: không đưa vào image) ──
+Backend/.env
+.env
+*.env
+
+# ── Output data (runtime-generated) ───────────
+Backend/data/
+data/
+
+# ── Docs & Knowledge base ─────────────────────
+docs/
+knowledge/
+Frontend/
+
+# ── OS artifacts ──────────────────────────────
+.DS_Store
+Thumbs.db

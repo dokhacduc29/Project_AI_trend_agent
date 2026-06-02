@@ -102,16 +102,26 @@ async def main():
 
     logging.info("AI TREND AGENT v3.1 (SOLID Edition)")
 
-    target_topic = None
-    while not target_topic:
-        try:
-            raw = input("\nMoi ban nhap tu khoa can tim: ")
-        except KeyboardInterrupt:
-            logging.info("Huy khoi dong. Tam biet!")
-            return
-        target_topic = validate_topic(raw)
+    # [CONTAINER] Đọc topic từ env var TOPIC (dùng trong Docker/K8s).
+    # Nếu không có, fallback sang interactive stdin (dùng khi chạy local).
+    env_topic = os.getenv("TOPIC", "").strip()
+    if env_topic:
+        target_topic = validate_topic(env_topic)
         if not target_topic:
-            logging.error("Tu khoa khong hop le. Vui long thu lai!")
+            logging.error(f"TOPIC env var '{env_topic}' khong hop le! Su dung default.")
+            target_topic = "Artificial Intelligence"
+        logging.info(f"[CONTAINER MODE] Topic tu env: '{target_topic}'")
+    else:
+        target_topic = None
+        while not target_topic:
+            try:
+                raw = input("\nMoi ban nhap tu khoa can tim: ")
+            except (KeyboardInterrupt, EOFError):
+                logging.info("Huy khoi dong. Tam biet!")
+                return
+            target_topic = validate_topic(raw)
+            if not target_topic:
+                logging.error("Tu khoa khong hop le. Vui long thu lai!")
 
     # Tạo pipeline context — chứa mọi thứ Agent cần
     ctx_template = PipelineContext(
@@ -126,7 +136,7 @@ async def main():
         AgentFactory.create("cleaner"),
         AgentFactory.create("analyzer"), # [Phase 4] Tích hợp bộ não AI
         AgentFactory.create("trend"),    # [Phase A] Phân tích xu hướng vĩ mô
-        AgentFactory.create("storage"),
+        AgentFactory.create("storage"),  # Lưu vào Supabase cloud (supabase_storage)
         AgentFactory.create("telegram"), # [Phase 6] Gửi thông báo Telegram
     ]
 
@@ -137,6 +147,12 @@ async def main():
     interval_seconds = config.SCHEDULE_INTERVAL_HOURS * 3600
     logging.info(f"AGENT TRUC CANH ({config.SCHEDULE_INTERVAL_HOURS} gio/lan)")
     logging.info("Nhan [Ctrl + C] de tat he thong.")
+
+    # Chờ DNS/network sẵn sàng trong môi trường container (K8s pod start)
+    startup_delay = int(os.getenv("STARTUP_DELAY_SECONDS", "0"))
+    if startup_delay > 0:
+        logging.info(f"Cho {startup_delay}s de DNS san sang...")
+        await asyncio.sleep(startup_delay)
 
     try:
         while True:

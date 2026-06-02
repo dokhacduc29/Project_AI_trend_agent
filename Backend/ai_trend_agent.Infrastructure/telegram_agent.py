@@ -46,7 +46,7 @@ class TelegramAgent(BaseAgent):
         chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
         if not telegram_token or not chat_id:
-            self.log_warning("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID. Bỏ qua bước gửi Telegram.")
+            self.log_info("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID. Bỏ qua bước gửi Telegram.")
             return ctx
 
         if not ctx.articles:

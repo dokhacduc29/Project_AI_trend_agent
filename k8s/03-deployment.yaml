@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-trend-agent
+  namespace: ai-trend-agent
+  labels:
+    app: ai-trend-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-trend-agent
+  template:
+    metadata:
+      labels:
+        app: ai-trend-agent
+    spec:
+      containers:
+        - name: ai-trend-agent
+          image: ai-trend-agent:v3
+          # Dùng image từ local minikube (không cần push lên registry)
+          imagePullPolicy: Never
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Load non-secret config từ ConfigMap
+          envFrom:
+            - configMapRef:
+                name: ai-trend-agent-config
+          # Load secrets từ Secret (override nếu trùng key với ConfigMap)
+          env:
+            - name: NEWS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-trend-agent-secrets
+                  key: NEWS_API_KEY
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-trend-agent-secrets
+                  key: GEMINI_API_KEY
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ai-trend-agent-secrets
+                  key: SUPABASE_URL
+            - name: SUPABASE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-trend-agent-secrets
+                  key: SUPABASE_KEY
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import os; exit(0 if os.path.exists('/app/ai_trend_agent.WebApi/main.py') else 1)"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+      restartPolicy: Always
