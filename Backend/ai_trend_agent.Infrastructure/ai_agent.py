@@ -18,6 +18,7 @@ from google import genai
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext, Sentiment, Article
 from gemini_client import generate_with_retry
+from prompt_loader import render_prompt
 import config
 from decorators import ai_timer, ai_logger
 
@@ -70,15 +71,9 @@ class SummarizationAgent(BaseAgent):
             f"[{i}] Title: {art.title}\nSource: {art.source}"
             for i, art in enumerate(articles_batch)
         ])
-        
-        prompt = (
-            "Phân tích các bài báo AI dưới đây. "
-            "Trả về JSON array, mỗi phần tử gồm:\n"
-            '{"index": <số thứ tự trong prompt>, "summary": "<tóm tắt tối đa 15 từ>", "sentiment": "<bullish/bearish/neutral>"}\n'
-            "Chỉ trả đúng JSON array, tuyệt đối không thêm markdown code blocks (như ```json) hay bất kỳ văn bản nào khác.\n\n"
-            f"{articles_text}"
-        )
-        
+
+        prompt = render_prompt("analyzer", articles_text=articles_text)
+
         assert self._client is not None, "_setup_gemini() phải được gọi trước _analyze_batch()"
         return await generate_with_retry(
             self._client,
@@ -187,10 +182,9 @@ class SummarizationAgent(BaseAgent):
         # -------------------------------------------------------------
         # CHIẾN LƯỢC 1: Batch Prompting (Gộp 5 bài vào 1 request)
         # -------------------------------------------------------------
-        BATCH_SIZE = 5
-        batches = [articles_to_analyze[i:i + BATCH_SIZE] for i in range(0, len(articles_to_analyze), BATCH_SIZE)]
+        batches = [articles_to_analyze[i:i + config.AI_BATCH_SIZE] for i in range(0, len(articles_to_analyze), config.AI_BATCH_SIZE)]
         
-        sem = asyncio.Semaphore(2)  # Tối đa 2 request đồng thời để tránh rate limit
+        sem = asyncio.Semaphore(1)  # Nối tiếp để không vượt 5 RPM free tier
 
         async def process_batch(batch):
             async with sem:

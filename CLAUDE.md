@@ -3,14 +3,17 @@
 > File memory chính cho Claude Code khi làm việc trong repo này.
 > Mục tiêu: cung cấp context kiến trúc, Iron Laws, và workflow để AI agent hành xử nhất quán.
 
+> **Trước mỗi phiên, đọc `docs/ai-context/context-index.md`** — entry point nạp
+> đầy đủ ngữ cảnh (tổng quan, Luật Thép, nhật ký quyết định/ADR).
+
 ---
 
 ## 1. Project Snapshot
 
-- **Tên**: AI Trend Agent v3.1 — SOLID Edition
+- **Tên**: AI Trend Agent v4.0 — SOLID Edition
 - **Ngôn ngữ**: Python 3.13 (async)
-- **Mục đích**: Pipeline tự động thu thập tin AI từ 3 nguồn (NewsAPI, Reddit JSON, Google News RSS), làm sạch, phân loại bằng regex/Gemini, và lưu CSV.
-- **Pattern chính**: Factory + Strategy + Pipeline (ETL) qua các `BaseAgent`.
+- **Mục đích**: Pipeline ETL tự động thu thập tin AI từ 3 nguồn (NewsAPI, Reddit JSON, Google News RSS), làm sạch (regex + Hybrid AI cleaner), phân tích bằng Gemini (summary/sentiment/trend synthesis), lưu **Supabase PostgreSQL** (CSV là fallback legacy), và phát hành qua **Discord webhook**.
+- **Pattern chính**: Factory + Strategy + Pipeline (ETL) qua các `BaseAgent`; pipeline phân biệt agent *critical* (lỗi → dừng) vs *enrichment* (lỗi → degrade).
 
 ## 2. Cấu trúc thư mục
 
@@ -25,22 +28,29 @@ AI_Trend_Agent/
 │   ├── ai_trend_agent.Domain/
 │   │   ├── models.py            # @dataclass Article + PipelineContext + Sentiment enum
 │   │   └── config.py            # Hằng số tập trung — Luật L09
+│   ├── prompts/                 # Prompt-as-artifact (ADR 0004) — tách khỏi code
 │   ├── ai_trend_agent.Application/
 │   │   ├── base_agent.py        # BaseAgent (ABC) + AgentFactory (decorator-based)
-│   │   └── decorators.py        # @retry, @timer, context managers
+│   │   ├── decorators.py        # @retry, @timer, context managers
+│   │   └── prompt_loader.py     # Nạp prompt từ prompts/ (ADR 0004)
 │   ├── ai_trend_agent.Infrastructure/
 │   │   ├── scrapers.py          # ScraperAgent — async multi-source
-│   │   ├── cleaner.py           # CleanerAgent — regex tag + dedupe
+│   │   ├── cleaner.py           # CleanerAgent — regex tag + dedupe + Hybrid AI (ADR 0002)
 │   │   ├── ai_agent.py          # AIAnalyzerAgent — Gemini summary + sentiment
+│   │   ├── trend_agent.py       # TrendSynthesisAgent — tổng hợp xu hướng (ADR 0001)
+│   │   ├── gemini_client.py     # Client Gemini + budget enforcement (ADR 0005)
 │   │   ├── storage.py           # StorageAgent — CSV append (legacy fallback)
-│   │   ├── supabase_storage.py  # SupabaseStorageAgent — Supabase PostgreSQL
-│   │   └── telegram_agent.py    # TelegramAgent — stub (Phase 6)
+│   │   ├── supabase_storage.py  # SupabaseStorageAgent — Supabase PostgreSQL (chính)
+│   │   ├── discord_agent.py     # DiscordAgent — publisher webhook (ADR 0007)
+│   │   └── telegram_agent.py    # TelegramAgent — deprecated (thay bằng Discord)
 │   ├── ai_trend_agent.WebApi/
 │   │   └── main.py              # Orchestrator: asyncio.run(main()) → run_pipeline
 │   └── ai_trend_agent.Tests/
-│       └── test_agents.py       # pytest unit tests
+│       ├── test_agents.py       # pytest unit tests
+│       ├── test_evals.py        # Eval suite — parser & robustness output AI (ADR 0006)
+│       └── evals/               # Golden datasets (vd: golden_sentiment.json)
 ├── .claude/skills/          # Skills định nghĩa hành vi AI agent
-└── docs/                    # Tài liệu, roadmap, kiến trúc
+└── docs/                    # Tài liệu, roadmap, kiến trúc (gồm docs/ai-context/)
 ```
 
 ## 3. 10 Iron Laws (rút gọn)
@@ -103,10 +113,11 @@ pytest ai_trend_agent.Tests/ -v
 
 - [x] Phase 1-2: Foundation + Pythonic
 - [x] Phase 3: OOP + SOLID
-- [x] Phase 4: Gemini AI integration
+- [x] Phase 4: Gemini AI integration (summary/sentiment + TrendSynthesis + Hybrid cleaner)
 - [x] Phase 5: Supabase PostgreSQL cloud database (thay CSV)
 - [x] Deploy: Docker multi-stage build + Kubernetes (minikube)
-- [ ] Phase 6: Telegram/Discord publisher (TelegramAgent hiện là stub)
+- [x] Hardening: pipeline resilience (ADR 0003), externalize prompts (ADR 0004), Gemini budget (ADR 0005), eval suite (ADR 0006)
+- [x] Phase 6: Discord publisher qua webhook (ADR 0007 — pivot từ Telegram)
 - [ ] CI/CD: GitHub Actions pipeline
 
 Chi tiết: `.claude/skills/roadmap/SKILL.md`.

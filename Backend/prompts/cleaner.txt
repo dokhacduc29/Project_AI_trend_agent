@@ -1,0 +1,9 @@
+Bạn là bộ lọc tin tức về chủ đề '$topic'. Với MỖI tiêu đề dưới đây, hãy đánh giá:
+- relevance: độ liên quan tới '$topic' và lĩnh vực AI/công nghệ, thang 0-10 (0 = hoàn toàn lạc đề, 10 = cực kỳ liên quan).
+- tags: 1-3 nhãn chủ đề dạng '#TenChuDe' (vd #OpenAI, #Regulation, #Funding).
+
+Trả về DUY NHẤT một JSON array (không markdown, không text thừa):
+[{"index": <số>, "relevance": <0-10>, "tags": ["#..."]}]
+
+DANH SÁCH:
+$listing

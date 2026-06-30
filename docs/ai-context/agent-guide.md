@@ -6,7 +6,7 @@ Dựa trên chuẩn "Standarized Project Initialization", đây là "Luật Thé
 
 | # | Luật | Yêu cầu bắt buộc |
 |---|------|------------------|
-| L01 | **Không Hardcode Secrets** | API Keys (NewsAPI, OpenAI, Telegram), token, mật khẩu tuyệt đối KHÔNG xuất hiện trong code. Bắt buộc dùng `python-dotenv` và file `.env`. |
+| L01 | **Không Hardcode Secrets** | API Keys (`NEWS_API_KEY`, `GEMINI_API_KEY`), token, Discord webhook URL, `SUPABASE_*` tuyệt đối KHÔNG xuất hiện trong code. Bắt buộc dùng `python-dotenv` và file `.env`. |
 | L02 | **Logging thay vì Print** | Cấm dùng `print()`. Bắt buộc dùng thư viện `logging` của Python (INFO, ERROR) để ghi nhận luồng hoạt động. |
 | L03 | **Bất đồng bộ (Asyncio)** | Cấm dùng `time.sleep()` hoặc `requests` đồng bộ trong các tác vụ I/O nặng (call API đa nguồn). Bắt buộc dùng `asyncio` và `httpx` / `aiohttp`. |
 | L04 | **Không SQL Injection** | Khi tích hợp Database, tuyệt đối không dùng string format (f-string) để nối chuỗi SQL. Bắt buộc dùng SQLAlchemy ORM hoặc Parameterized Queries. |

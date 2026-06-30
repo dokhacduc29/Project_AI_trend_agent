@@ -34,6 +34,7 @@ for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_a
 # Import base_agent TRƯỚC để Factory sẵn sàng
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext
+from gemini_client import reset_budget, budget_report
 import config
 
 # Import các module Agent — decorator @register sẽ TỰ ĐĂNG KÝ vào Factory
@@ -42,7 +43,8 @@ import cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
 import ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
 import trend_agent # noqa: F401 — side-effect import (đăng ký "trend" → phân tích xu hướng)
 import supabase_storage  # noqa: F401 — side-effect import (đăng ký "storage" → Supabase)
-import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram")
+import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram" — legacy, không dùng)
+import discord_agent  # noqa: F401 — side-effect import (đăng ký "discord" → publisher hiện hành)
 
 
 def validate_topic(user_input: str) -> str | None:
@@ -71,15 +73,30 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext):
     logging.info(f"KHOI DONG CHU KY QUET: '{ctx.topic.upper()}'")
     logging.info("=" * 60)
 
+    # [ADR 0005] Reset budget Gemini cho chu kỳ mới
+    reset_budget()
+
     for agent in agents:
         try:
             ctx = await agent.execute(ctx)
             if not ctx.articles and isinstance(agent, BaseAgent):
                 logging.warning(f"{agent.agent_name} tra ve 0 bai. Kiem tra nguon.")
         except Exception as e:
-            logging.error(f"Loi tai {agent.agent_name}: {e}")
-            return
+            # [RESILIENCE — ADR 0003] Agent critical lỗi → dừng chu kỳ.
+            # Agent enrichment lỗi → log rồi đi tiếp, KHÔNG làm mất dữ liệu
+            # đã cào/đã lưu ở các bước trước (no silent abort của cả pipeline).
+            if getattr(agent, "is_critical", False):
+                logging.error(f"[CRITICAL] {agent.agent_name} loi: {e}. Dung chu ky.")
+                return
+            logging.error(f"[ENRICHMENT] {agent.agent_name} loi: {e}. Bo qua, pipeline di tiep.")
+            continue
 
+    # [ADR 0005] Tổng kết budget Gemini của chu kỳ (observability)
+    b = budget_report()
+    logging.info(
+        f"[BUDGET] Gemini calls={b['calls']}/{config.GEMINI_MAX_CALLS_PER_CYCLE} "
+        f"| ~input_tokens={b['approx_input_tokens']} | blocked={b['blocked']}"
+    )
     logging.info("=" * 60 + "\n")
 
 
@@ -137,7 +154,7 @@ async def main():
         AgentFactory.create("analyzer"), # [Phase 4] Tích hợp bộ não AI
         AgentFactory.create("trend"),    # [Phase A] Phân tích xu hướng vĩ mô
         AgentFactory.create("storage"),  # Lưu vào Supabase cloud (supabase_storage)
-        AgentFactory.create("telegram"), # [Phase 6] Gửi thông báo Telegram
+        AgentFactory.create("discord"),  # [Phase 6] Gửi thông báo Discord (thay Telegram)
     ]
 
     for agent in agents:
@@ -191,7 +208,7 @@ if __name__ == "__main__":
             ps.print_stats(30)
             logging.info("=" * 60)
             logging.info("KET QUA PROFILING (Top 30 ham tieu ton thoi gian nhat):")
-            print(s.getvalue())
+            logging.info(s.getvalue())
             logging.info("=" * 60)
     else:
         asyncio.run(main())

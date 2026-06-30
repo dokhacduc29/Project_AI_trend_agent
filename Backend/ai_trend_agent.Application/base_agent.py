@@ -60,7 +60,17 @@ class AgentFactory:
 class BaseAgent(ABC):
     """
     [DAY 21-27] Bản thiết kế trừu tượng — "Hiến pháp" của mọi Agent.
+
+    [RESILIENCE — ADR 0003] is_critical phân loại agent:
+        - True  (critical): agent lỗi → DỪNG cả chu kỳ (vd scraper: không có
+                 dữ liệu thì các bước sau vô nghĩa).
+        - False (enrichment): agent lỗi → LOG rồi BỎ QUA, pipeline đi tiếp
+                 (vd analyzer/trend/discord: hỏng cũng không được làm mất
+                 dữ liệu đã cào + đã lưu).
+    Tham chiếu nguyên tắc "result universality / no silent abort"
+    (DenisSergeevitch/agents-best-practices).
     """
+    is_critical: bool = False
 
     def __init__(self, agent_name: str):
         self.agent_name = agent_name

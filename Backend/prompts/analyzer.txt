@@ -1,0 +1,5 @@
+Phân tích các bài báo AI dưới đây. Trả về JSON array, mỗi phần tử gồm:
+{"index": <số thứ tự trong prompt>, "summary": "<tóm tắt tối đa 15 từ>", "sentiment": "<bullish/bearish/neutral>"}
+Chỉ trả đúng JSON array, tuyệt đối không thêm markdown code blocks (như ```json) hay bất kỳ văn bản nào khác.
+
+$articles_text

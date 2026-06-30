@@ -21,6 +21,8 @@ import config
 class ScraperAgent(BaseAgent):
     """Lính trinh sát — Cào tin từ 3 nguồn."""
 
+    is_critical = True  # Không có dữ liệu thô → toàn bộ chu kỳ vô nghĩa
+
     def __init__(self, **kwargs):
         super().__init__("ScraperAgent")
 

@@ -1,0 +1,52 @@
+{
+  "_doc": "Golden set cho EVAL parser/robustness (ADR 0006). Mỗi case gồm tiêu đề bài, 'response' = chuỗi RAW mà Gemini trả về, và 'expected' = giá trị Sentiment.value mong đợi sau khi parse. Mục tiêu: khóa hành vi của SummarizationAgent._parse_batch_response — vùng code dễ vỡ nhất (bóc markdown + map sentiment).",
+  "cases": [
+    {
+      "title": "OpenAI raises record 10B funding round",
+      "response": "[{\"index\": 0, \"summary\": \"OpenAI gọi vốn kỷ lục\", \"sentiment\": \"bullish\"}]",
+      "expected": "Tích cực"
+    },
+    {
+      "title": "EU fines AI firm for privacy breach",
+      "response": "[{\"index\": 0, \"summary\": \"EU phạt nặng\", \"sentiment\": \"bearish\"}]",
+      "expected": "Tiêu cực"
+    },
+    {
+      "title": "Google releases minor Gemini update",
+      "response": "[{\"index\": 0, \"summary\": \"Cập nhật nhỏ\", \"sentiment\": \"neutral\"}]",
+      "expected": "Trung lập"
+    },
+    {
+      "title": "Markdown-wrapped response from model",
+      "response": "```json\n[{\"index\": 0, \"summary\": \"Bị bọc code block\", \"sentiment\": \"bullish\"}]\n```",
+      "expected": "Tích cực"
+    },
+    {
+      "title": "Vietnamese sentiment label",
+      "response": "[{\"index\": 0, \"summary\": \"Nhãn tiếng Việt\", \"sentiment\": \"tích cực\"}]",
+      "expected": "Tích cực"
+    },
+    {
+      "title": "Uppercase BEARISH label",
+      "response": "[{\"index\": 0, \"summary\": \"Chữ hoa\", \"sentiment\": \"BEARISH\"}]",
+      "expected": "Tiêu cực"
+    }
+  ],
+  "robustness": [
+    {
+      "title": "Malformed JSON must not crash",
+      "response": "{not valid json at all",
+      "expect_default_neutral": true
+    },
+    {
+      "title": "Empty array",
+      "response": "[]",
+      "expect_default_neutral": true
+    },
+    {
+      "title": "Fallback marker from budget/error",
+      "response": "[]",
+      "expect_default_neutral": true
+    }
+  ]
+}

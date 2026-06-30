@@ -1,6 +1,33 @@
 # Nhật Ký Quyết Định & Bộ Nhớ (Memory Log)
 
-Ghi nhận các quyết định thiết kế quan trọng, thay đổi kiến trúc và trạng thái hệ thống qua các giai đoạn phát triển.
+Ghi nhận trạng thái hệ thống và **trỏ tới** các quyết định kiến trúc chi tiết.
+Nguồn sự thật của mọi quyết định là `knowledge/decisions/` (ADR) — file này chỉ
+tóm tắt và liên kết, không kể lại (tuân thủ rule *single source*).
+
+## Index ADR (nguồn chuẩn: `knowledge/decisions/`)
+
+| ADR | Quyết định | Ngày |
+|---|---|---|
+| [0001](../../knowledge/decisions/0001-trend-synthesis-agent.md) | Thêm `TrendSynthesisAgent` & mở rộng `PipelineContext` | — |
+| [0002](../../knowledge/decisions/0002-hybrid-ai-cleaner.md) | Hybrid AI Cleaner & mở rộng `Article` model | — |
+| [0003](../../knowledge/decisions/0003-pipeline-resilience.md) | Pipeline resilience: phân biệt agent *critical* vs *enrichment* | 2026-06-30 |
+| [0004](../../knowledge/decisions/0004-externalize-prompts.md) | Tách prompt ra file (`prompt_loader.py`, `prompts/`) | 2026-06-30 |
+| [0005](../../knowledge/decisions/0005-gemini-budget.md) | Budget enforcement cho lời gọi Gemini | 2026-06-30 |
+| [0006](../../knowledge/decisions/0006-eval-suite.md) | Eval suite cho parser & robustness output AI | 2026-06-30 |
+| [0007](../../knowledge/decisions/0007-discord-pivot.md) | Chuyển publisher Telegram → Discord (webhook) | 2026-06-30 |
+
+## [2026-06-30] Hardening + Pivot Publisher (Phase 6)
+
+Tóm tắt — chi tiết xem ADR tương ứng ở bảng trên:
+- **Resilience (0003)**: pipeline chia agent thành *critical* (lỗi → dừng) và
+  *enrichment* (lỗi → degrade, vẫn tiếp tục). Mọi tool call trả observation, không null.
+- **Prompt-as-artifact (0004)**: prompt Gemini tách khỏi code vào `prompts/`, nạp
+  qua `prompt_loader.py` — sửa prompt không đụng logic.
+- **Gemini budget (0005)**: giới hạn số lời gọi/chi phí Gemini mỗi lần chạy.
+- **Eval suite (0006)**: `test_evals.py` + `evals/` kiểm thử độ bền parser và
+  output AI (ngoài unit test thuần).
+- **Discord pivot (0007)**: Telegram trên máy người dùng hỏng → thay bằng
+  `DiscordAgent` qua Incoming Webhook, mirror pattern `TelegramAgent`.
 
 ## [2026-05-14] Chuẩn hóa Kiến trúc Đa lớp & Rà soát Luật Thép
 
@@ -12,12 +39,12 @@ Ghi nhận các quyết định thiết kế quan trọng, thay đổi kiến tr
 - Cấu hình file `settings.json` và `pyrightconfig.json` sử dụng đường dẫn tuyệt đối chuẩn gạch chéo xuôi (`/`) để Pylance/Pyright giải quyết hoàn hảo các câu lệnh import phẳng (flat import) mà không cần can thiệp mã nguồn.
 - Tạo file `.env` toàn cục cấp gốc định nghĩa biến `PYTHONPATH` hỗ trợ VS Code Python Extension đồng bộ môi trường phân tích ngầm định.
 
-### 3. Kết quả Rà soát Code theo 22 Nguyên Tắc Tối Cao
-- **L01 (No Commit Secret)**: Tuân thủ 100%. Mọi API Key (`NEWS_API_KEY`, `GEMINI_API_KEY`) đều nạp động qua `PipelineContext` từ file `.env` không được commit.
-- **L04 (Layer Boundary)**: Lớp `Domain` chỉ chứa hằng số/dataclasses thuần túy. Lớp `Application` định nghĩa interfaces/decorators độc lập. Lớp `Infrastructure` kế thừa và triển khai gọi I/O bên ngoài.
-- **L05 (No Blocking Async)**: Tận dụng hoàn toàn I/O bất đồng bộ qua `httpx.AsyncClient` và `asyncio.gather()`. Không sử dụng các tác vụ chờ đồng bộ gây nghẽn luồng.
-- **L16 (No Sensitive Logging)**: Thông tin ghi nhận giới hạn ở mức độ đo lường hiệu suất (Timer), số lượng bản ghi và thông tin tracing cơ bản.
-- **L19 (No Magic Numbers)**: Các thông số vòng đời, kích thước trang, định mức truy vấn đều được quản lý tập trung tại `config.py`.
+### 3. Kết quả Rà soát Code theo 10 Luật Thép (xem `agent-guide.md`)
+- **L01 (No Hardcode Secrets)**: Tuân thủ 100%. Mọi API Key (`NEWS_API_KEY`, `GEMINI_API_KEY`) đều nạp động qua `PipelineContext` từ file `.env` không được commit.
+- **L02 (Logging)**: Ghi nhận giới hạn ở đo lường hiệu suất (Timer), số lượng bản ghi và tracing cơ bản; không log dữ liệu nhạy cảm.
+- **L03 (Asyncio)**: Tận dụng hoàn toàn I/O bất đồng bộ qua `httpx.AsyncClient` và `asyncio.gather()`, không có tác vụ chờ đồng bộ gây nghẽn luồng.
+- **L09 (No Magic Numbers)**: Các thông số vòng đời, kích thước trang, định mức truy vấn đều quản lý tập trung tại `config.py`.
+- **Phân lớp (kiến trúc)**: `Domain` chỉ chứa hằng số/dataclasses thuần; `Application` định nghĩa interface/decorator; `Infrastructure` triển khai I/O ngoài.
 
 ### 4. Đồng bộ Lộ trình Chiến lược (Roadmap .v2)
 - Cập nhật ánh xạ thực tế các kỹ năng Python Backend đã được lập trình hoàn chỉnh vào cột Trạng thái của file `Roadmap .v2.csv` (đánh dấu `✅ Done` cho các ngày thuộc Phase 2, 3, 4, 5 tương ứng với mã nguồn Core ETL hiện hành).

@@ -24,13 +24,13 @@ description: Trạng thái phase hiện tại và roadmap dài hạn của dự 
 
 1. Mở rộng test coverage — đã có `test_agents.py`, cần thêm case.
 2. Profiling pipeline (đo tốc độ từng agent).
-3. Hoàn thiện `TelegramAgent` — hiện chỉ là stub, chưa gọi API Telegram thật.
+3. Hoàn thiện `DiscordAgent` — hiện chỉ là stub, chưa gọi API Discord thật.
 
 ### Sắp tới
 
 | Phase | Nội dung | Điều kiện tiên quyết |
 |-------|----------|---------------------|
-| 6 | Multi-channel publisher (Telegram/Discord) | TelegramAgent stub → hoàn thiện |
+| 6 | Multi-channel publisher (Telegram/Discord) | DiscordAgent stub → hoàn thiện |
 | CI/CD | GitHub Actions: build → test → scan → deploy | Test suite ổn định |
 | 7+ | FastAPI Web API, RAG chatbot, full-text extraction | Phase 6 done |
 
@@ -42,7 +42,7 @@ description: Trạng thái phase hiện tại và roadmap dài hạn của dự 
 
 ## Tính năng chưa phát triển (để rỗng — chưa làm)
 
-- **TelegramAgent**: file tồn tại nhưng `execute()` chỉ là stub, chưa `httpx.post` tới Telegram API.
+- **DiscordAgent**: file tồn tại nhưng `execute()` chỉ là stub, chưa `httpx.post` tới Discord API.
 - **CI/CD**: chưa có GitHub Actions workflow.
 - **FastAPI**: chưa khởi tạo Web API.
 - **SQLAlchemy ORM**: dự án dùng Supabase client trực tiếp.

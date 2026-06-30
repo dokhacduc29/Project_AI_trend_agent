@@ -21,6 +21,7 @@ from google import genai
 from base_agent import BaseAgent, AgentFactory
 from models import Article, PipelineContext
 from gemini_client import generate_with_retry
+from prompt_loader import render_prompt
 import config
 
 
@@ -87,16 +88,7 @@ class CleanerAgent(BaseAgent):
     def _build_score_prompt(self, articles: list[Article], topic: str) -> str:
         """Tạo prompt yêu cầu AI chấm điểm liên quan + gán tag cho từng bài."""
         listing = "\n".join(f"[{i}] {art.title}" for i, art in enumerate(articles))
-        return (
-            f"Bạn là bộ lọc tin tức về chủ đề '{topic}'. "
-            f"Với MỖI tiêu đề dưới đây, hãy đánh giá:\n"
-            f"- relevance: độ liên quan tới '{topic}' và lĩnh vực AI/công nghệ, thang 0-10 "
-            f"(0 = hoàn toàn lạc đề, 10 = cực kỳ liên quan).\n"
-            f"- tags: 1-3 nhãn chủ đề dạng '#TenChuDe' (vd #OpenAI, #Regulation, #Funding).\n\n"
-            f"Trả về DUY NHẤT một JSON array (không markdown, không text thừa):\n"
-            '[{"index": <số>, "relevance": <0-10>, "tags": ["#..."]}]\n\n'
-            f"DANH SÁCH:\n{listing}"
-        )
+        return render_prompt("cleaner", topic=topic, listing=listing)
 
     async def _call_gemini(self, prompt: str) -> str:
         """Gọi Gemini qua helper chung (retry backoff). Lỗi → '[]'."""

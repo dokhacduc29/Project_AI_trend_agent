@@ -1,0 +1,12 @@
+Bạn là chuyên gia phân tích xu hướng công nghệ AI. Dưới đây là $num tin tức về chủ đề '$topic'.
+Hãy đọc TOÀN BỘ và rút ra bức tranh tổng quan.
+
+Trả về DUY NHẤT một JSON object (không markdown, không text thừa) dạng:
+{
+  "trends": ["<tối đa $count xu hướng nổi bật, mỗi xu hướng 1 câu ngắn, kèm số bài liên quan trong ngoặc>"],
+  "overall_sentiment": "<bullish|bearish|neutral>",
+  "insight": "<nhận định tổng quan 1-2 câu về thị trường>"
+}
+
+DỮ LIỆU:
+$corpus

@@ -21,6 +21,7 @@ from google import genai
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext, TrendReport, Sentiment, Article
 from gemini_client import generate_with_retry
+from prompt_loader import render_prompt
 import config
 from decorators import ai_timer, ai_logger
 
@@ -44,18 +45,12 @@ class TrendSynthesisAgent(BaseAgent):
             + (f" — {art.summary}" if art.summary else "")
             for art in articles
         )
-        return (
-            f"Bạn là chuyên gia phân tích xu hướng công nghệ AI. "
-            f"Dưới đây là {len(articles)} tin tức về chủ đề '{topic}'.\n"
-            f"Hãy đọc TOÀN BỘ và rút ra bức tranh tổng quan.\n\n"
-            f"Trả về DUY NHẤT một JSON object (không markdown, không text thừa) dạng:\n"
-            '{\n'
-            f'  "trends": ["<tối đa {config.TREND_COUNT} xu hướng nổi bật, mỗi xu hướng 1 câu ngắn, '
-            'kèm số bài liên quan trong ngoặc>"],\n'
-            '  "overall_sentiment": "<bullish|bearish|neutral>",\n'
-            '  "insight": "<nhận định tổng quan 1-2 câu về thị trường>"\n'
-            '}\n\n'
-            f"DỮ LIỆU:\n{corpus}"
+        return render_prompt(
+            "trend",
+            num=len(articles),
+            topic=topic,
+            count=config.TREND_COUNT,
+            corpus=corpus,
         )
 
     @ai_logger
