@@ -1,6 +1,6 @@
 # 🤖 AI Trend Agent v4.0 — SOLID Edition
 
-> An automated pipeline that scrapes, AI-cleans (relevance scoring), tags, AI-summarizes, synthesizes macro trends, stores into a cloud database, and pushes a digest to Telegram — built with async Python, OOP, SOLID principles, and Gemini AI.
+> An automated pipeline that scrapes, AI-cleans (relevance scoring), tags, AI-summarizes, synthesizes macro trends, stores into a cloud database, and pushes a digest to Discord — built with async Python, OOP, SOLID principles, and Gemini AI.
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture%20%2B%20SOLID-green)
@@ -8,6 +8,7 @@
 ![AI](https://img.shields.io/badge/AI-Gemini%202.5%20Flash-orange?logo=google&logoColor=white)
 ![Database](https://img.shields.io/badge/DB-Supabase%20PostgreSQL-3ECF8E?logo=supabase)
 ![Container](https://img.shields.io/badge/Deploy-Docker%20%2B%20K8s-2496ED?logo=docker)
+![Discord](https://img.shields.io/badge/Notify-Discord%20Webhook-5865F2?logo=discord&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
@@ -22,7 +23,7 @@ AI Trend Agent automatically monitors and collects the latest AI news from **3 s
 | **Reddit** (`r/ArtificialIntelligence`) | OAuth API (fallback public JSON) | JSON |
 | **Google News** | RSS Feed | XML |
 
-The pipeline runs on a schedule (default: every 4 hours): collecting, deduplicating, hybrid AI-cleaning (regex + Gemini relevance scoring), AI-summarizing, synthesizing macro trends, storing into a **Supabase PostgreSQL cloud database**, and sending a formatted **Telegram digest**.
+The pipeline runs on a schedule (default: every 4 hours): collecting, deduplicating, hybrid AI-cleaning (regex + Gemini relevance scoring), AI-summarizing, synthesizing macro trends, storing into a **Supabase PostgreSQL cloud database**, and sending a formatted **Discord digest**.
 
 ---
 
@@ -40,10 +41,10 @@ WebApi/main.py (Orchestrator + AgentFactory)
     ├── SummarizationAgent       →  Analyze   (Gemini 2.5 Flash — per-article summary + sentiment, batch + cache)
     ├── TrendSynthesisAgent      →  Synthesize(Gemini — macro trends across all articles)            [Phase A]
     ├── SupabaseStorageAgent     →  Load      (Supabase PostgreSQL — Phase 5)
-    └── TelegramAgent            →  Notify    (Telegram digest: trends + articles — Phase 6)
+    └── DiscordAgent             →  Notify    (Discord webhook: trends + articles — Phase 6, ADR 0007)
 ```
 
-> Shared `gemini_client.generate_with_retry()` helper centralizes Gemini calls (exponential backoff for 503/429) used by the Cleaner, Summarization, and Trend agents.
+> Shared `gemini_client.generate_with_retry()` helper centralizes Gemini calls (exponential backoff for 503/429) used by the Cleaner, Summarization, and Trend agents. A per-cycle **token budget** is enforced to prevent runaway costs (ADR 0005).
 >
 > `StorageAgent` (CSV append-only writer with threading) still exists as a legacy fallback but is not part of the default pipeline.
 
@@ -72,30 +73,41 @@ Project_AI_trend_agent/
 ├── Backend/
 │   ├── requirements.txt
 │   ├── .env                            # API keys (not tracked by git)
+│   ├── .env.example                    # Template — copy to .env and fill values
+│   │
+│   ├── prompts/                        # Prompt-as-artifact (ADR 0004)
+│   │   ├── analyzer.txt                # Prompt for SummarizationAgent
+│   │   ├── cleaner.txt                 # Prompt for CleanerAgent AI tier
+│   │   └── trend.txt                   # Prompt for TrendSynthesisAgent
 │   │
 │   ├── ai_trend_agent.Domain/          # Entities, models, config
 │   │   ├── models.py                   # @dataclass Article, PipelineContext, Sentiment
 │   │   └── config.py                   # Centralized constants (L09 — no magic numbers)
 │   │
-│   ├── ai_trend_agent.Application/      # Business logic abstractions
+│   ├── ai_trend_agent.Application/     # Business logic abstractions
 │   │   ├── base_agent.py               # BaseAgent (ABC) + AgentFactory (decorator)
-│   │   └── decorators.py               # @retry, @ai_timer, @ai_logger
+│   │   ├── decorators.py               # @retry, @ai_timer, @ai_logger
+│   │   └── prompt_loader.py            # Loads prompts from prompts/ at runtime (ADR 0004)
 │   │
 │   ├── ai_trend_agent.Infrastructure/  # Concrete implementations
 │   │   ├── scrapers.py                 # ScraperAgent — async multi-source (Reddit OAuth)
 │   │   ├── cleaner.py                  # CleanerAgent — hybrid regex + AI relevance [Phase B]
 │   │   ├── ai_agent.py                 # SummarizationAgent — Gemini summary + sentiment
-│   │   ├── trend_agent.py             # TrendSynthesisAgent — macro trends [Phase A]
-│   │   ├── gemini_client.py            # Shared Gemini call helper (retry backoff)
+│   │   ├── trend_agent.py              # TrendSynthesisAgent — macro trends [Phase A]
+│   │   ├── gemini_client.py            # Shared Gemini call helper (retry + budget, ADR 0005)
 │   │   ├── storage.py                  # StorageAgent — CSV (legacy fallback)
 │   │   ├── supabase_storage.py         # SupabaseStorageAgent — Supabase
-│   │   └── telegram_agent.py           # TelegramAgent — Bot digest (trends + articles)
+│   │   ├── discord_agent.py            # DiscordAgent — webhook publisher (ADR 0007)
+│   │   └── telegram_agent.py           # TelegramAgent — deprecated (replaced by Discord)
 │   │
 │   ├── ai_trend_agent.WebApi/
 │   │   └── main.py                     # Entry point — pipeline orchestrator
 │   │
 │   └── ai_trend_agent.Tests/
-│       └── test_agents.py              # pytest unit tests
+│       ├── test_agents.py              # pytest unit tests
+│       ├── test_evals.py               # Eval suite — parser & AI output robustness (ADR 0006)
+│       └── evals/
+│           └── golden_sentiment.json   # Golden dataset for sentiment eval
 │
 ├── k8s/                                # Kubernetes manifests (minikube)
 │   ├── 00-namespace.yaml
@@ -109,7 +121,14 @@ Project_AI_trend_agent/
 │   └── skills/                         # Architecture guide, coding rules, roadmap
 │
 ├── knowledge/                          # Architecture Decision Records (ADR)
-│   └── decisions/                      # 0001 Trend Synthesis, 0002 Hybrid Cleaner
+│   └── decisions/
+│       ├── 0001-trend-synthesis.md
+│       ├── 0002-hybrid-cleaner.md
+│       ├── 0003-pipeline-resilience.md # critical vs enrichment agent classification
+│       ├── 0004-externalize-prompts.md # prompt-as-artifact pattern
+│       ├── 0005-gemini-budget.md       # per-cycle token budget enforcement
+│       ├── 0006-eval-suite.md          # golden dataset eval suite
+│       └── 0007-discord-pivot.md       # pivot from Telegram to Discord webhook
 │
 └── docs/                               # Project documentation
     ├── 01-strategy/                    # Roadmap & planning
@@ -143,15 +162,23 @@ venv\Scripts\activate        # Windows
 # 3. Install dependencies
 pip install -r Backend/requirements.txt
 
-# 4. Configure API keys in Backend/.env
-#    NEWS_API_KEY=your_newsapi_key
-#    GEMINI_API_KEY=your_gemini_key
-#    SUPABASE_URL=your_supabase_url
-#    SUPABASE_KEY=your_supabase_anon_key
-#    TELEGRAM_BOT_TOKEN=your_bot_token       (optional — Phase 6)
-#    TELEGRAM_CHAT_ID=your_chat_id           (optional — Phase 6)
-#    REDDIT_CLIENT_ID=your_reddit_client_id  (optional — fixes Reddit 403 via OAuth)
-#    REDDIT_CLIENT_SECRET=your_reddit_secret (optional — create a "script" app at reddit.com/prefs/apps)
+# 4. Configure API keys — copy the template then fill in real values
+#    cp Backend/.env.example Backend/.env
+#
+#    Required:
+#      NEWS_API_KEY=your_newsapi_key
+#      GEMINI_API_KEY=your_gemini_key
+#      SUPABASE_URL=your_supabase_url
+#      SUPABASE_KEY=your_supabase_anon_key
+#
+#    Phase 6 — Discord publisher (required for digest notifications):
+#      DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+#      (Channel → Settings → Integrations → New Webhook → Copy URL)
+#
+#    Optional — Reddit OAuth (fixes 403 errors):
+#      REDDIT_CLIENT_ID=your_reddit_client_id
+#      REDDIT_CLIENT_SECRET=your_reddit_secret
+#      (create a "script" app at reddit.com/prefs/apps)
 ```
 
 ### Run
@@ -167,7 +194,7 @@ Enter a search topic (e.g., `Artificial Intelligence`), or set the `TOPIC` env v
 3. **Analyze** — Gemini 2.5 Flash summarizes + scores sentiment (bullish/bearish/neutral) per article
 4. **Synthesize trends** — Gemini reads all articles → 3–5 macro trends + overall sentiment + insight [Phase A]
 5. **Store** — upsert new articles into Supabase (`on_conflict=url`)
-6. **Notify** — send a Telegram digest (trends on top + article list, auto-chunked ≤4096 chars)
+6. **Notify** — send a Discord digest via webhook (trends on top + article list, auto-chunked ≤1900 chars)
 7. **Repeat** every 4 hours — stop gracefully with `Ctrl + C`
 
 ---
@@ -212,6 +239,8 @@ Per-article output:
 - **Summary** — max 15 words
 - **Sentiment** — `Tích cực` (bullish) / `Tiêu cực` (bearish) / `Trung lập` (neutral)
 
+Prompts are stored as plain-text artifacts in `Backend/prompts/` and loaded at runtime via `prompt_loader.py` — no prompt strings buried in code (ADR 0004).
+
 ---
 
 ## 🏷️ Hybrid Cleaner — Regex + AI (Phase B)
@@ -245,7 +274,21 @@ While `SummarizationAgent` summarizes **each** article (micro view), `TrendSynth
 - **Overall market sentiment** (bullish / bearish / neutral)
 - **One-line insight**
 
-The result (`PipelineContext.trend_report`) is placed at the **top of the Telegram digest** so the big picture comes first.
+The result (`PipelineContext.trend_report`) is placed at the **top of the Discord digest** so the big picture comes first.
+
+---
+
+## 📣 Discord Publisher (Phase 6)
+
+`DiscordAgent` sends the pipeline digest to a Discord channel via **Incoming Webhook** — no bot token required.
+
+- **Auto-chunk** — splits messages at ≤1900 chars on newline boundaries to stay under Discord's 2000-char limit
+- **Trends first** — `trend_report` always leads the digest; article list follows
+- **Fault-tolerant** — if the webhook call fails, the error is logged and the pipeline continues (enrichment agent, not critical)
+
+To set up: Discord channel → **Settings → Integrations → Webhooks → New Webhook → Copy URL** → paste into `DISCORD_WEBHOOK_URL` in `.env`.
+
+> `telegram_agent.py` is kept in the repo for reference but is no longer wired into the default pipeline (ADR 0007).
 
 ---
 
@@ -292,6 +335,10 @@ kubectl logs -f deployment/ai-trend-agent -n ai-trend-agent
 | Multi-stage Dockerfile | Build deps separated from runtime — smaller, non-root image |
 | `config.py` constants | Zero magic numbers in business logic (Iron Law L09) |
 | Gemini 2.5 Flash | Best speed/cost model for summarization |
+| Prompt-as-artifact (`prompts/`) | Prompts versioned separately from code — tweak without touching Python (ADR 0004) |
+| Critical vs enrichment agents | Pipeline degrades gracefully — enrichment failures skip, not crash (ADR 0003) |
+| Gemini budget per cycle | Hard token cap prevents runaway API costs in long-running loops (ADR 0005) |
+| Discord over Telegram | Webhook needs no bot approval process; easier to set up and share (ADR 0007) |
 
 ---
 
@@ -305,7 +352,7 @@ kubectl logs -f deployment/ai-trend-agent -n ai-trend-agent
 2026-06-02 16:25:02 - [INFO] - [SummarizationAgent] Hoàn thành phân tích AI và cập nhật Cache.
 2026-06-02 16:25:13 - [INFO] - [TrendSynthesisAgent] Đã rút ra 4 xu hướng nổi bật.
 2026-06-02 16:25:15 - [INFO] - [SupabaseStorageAgent] Đã lưu thành công 8 bài mới vào Supabase.
-2026-06-02 16:25:17 - [INFO] - [TelegramAgent] Đã gửi thành công 2/2 tin nhắn qua Telegram.
+2026-06-02 16:25:17 - [INFO] - [DiscordAgent] Đã gửi thành công 2/2 tin nhắn qua Discord webhook.
 ```
 
 ---
@@ -336,6 +383,7 @@ Current test coverage:
 - `Article` dataclass — `__eq__`, `__hash__`, `__len__`
 - `CleanerAgent` — regex tagging accuracy
 - `AgentFactory` — registration & creation
+- **Eval suite** (`test_evals.py`) — parser robustness + AI output validation against `evals/golden_sentiment.json` (ADR 0006)
 
 ---
 
@@ -349,10 +397,11 @@ Current test coverage:
 | 4 | Gemini AI: summarization + sentiment + FinOps | ✅ Done |
 | 5 | Database storage: Supabase PostgreSQL cloud | ✅ Done |
 | Deploy | Docker multi-stage build + Kubernetes (minikube) | ✅ Done |
-| 6 | Multi-channel publisher: Telegram digest (trends + articles) | ✅ Done |
 | **A** | **AI Trend Synthesis** — macro trends across all articles (ADR 0001) | ✅ Done |
 | **B** | **Hybrid AI Cleaner** — regex + Gemini relevance scoring (ADR 0002) | ✅ Done |
 | Infra | Reddit OAuth fix + shared Gemini retry helper | ✅ Done |
+| Hardening | Pipeline resilience + externalized prompts + Gemini budget + eval suite (ADR 0003–0006) | ✅ Done |
+| 6 | Discord publisher via webhook — pivot from Telegram (ADR 0007) | ✅ Done |
 | CI/CD | GitHub Actions: build → test → scan → deploy | ⏳ Planned |
 | C | RAG chatbot / Q&A over collected articles | ⏳ Planned |
 | D | Agentic loop — LLM self-directed search & tool use | ⏳ Planned |
