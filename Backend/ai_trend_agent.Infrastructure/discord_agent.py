@@ -86,6 +86,8 @@ class DiscordAgent(BaseAgent):
             "content": content,
             # Tắt unfurl link rườm rà; vẫn cho phép mention=none để an toàn
             "allowed_mentions": {"parse": []},
+            # SUPPRESS_EMBEDS: chặn card preview tự sinh từ link (Google News rác)
+            "flags": config.DISCORD_SUPPRESS_EMBEDS_FLAG,
         }
         try:
             res = await client.post(webhook_url, json=payload, timeout=config.REQUEST_TIMEOUT)

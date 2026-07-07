@@ -71,11 +71,12 @@ class CleanerAgent(BaseAgent):
             if not article.title:
                 continue
             article.tags = self.extract_entities(article.title)
-            clean_title = re.sub(r'[^\w\s+\-&#.]', '', article.title).lower().strip()
-            if clean_title and clean_title not in seen:
-                article.title = clean_title
+            # Bản normalize CHỈ dùng làm khóa khử trùng lặp — KHÔNG ghi đè title hiển thị.
+            dedupe_key = re.sub(r'[^\w\s+\-&#.]', '', article.title).lower().strip()
+            if dedupe_key and dedupe_key not in seen:
+                article.title = article.title.strip()   # giữ nguyên hoa/thường + dấu câu
                 cleaned.append(article)
-                seen.add(clean_title)
+                seen.add(dedupe_key)
         cleaned.sort(key=lambda a: a.date, reverse=True)
         return cleaned
 

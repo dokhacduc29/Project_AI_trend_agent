@@ -59,6 +59,7 @@ TELEGRAM_SEND_DELAY: float = 0.5         # Giây nghỉ giữa các chunk để 
 DISCORD_MAX_MESSAGE_LENGTH: int = 1900   # Giới hạn an toàn (Discord cap cứng 2000 ký tự/message)
 DISCORD_SEND_DELAY: float = 0.6          # Giây nghỉ giữa các chunk để tránh rate limit (5 req/s)
 DISCORD_USERNAME: str = "AI Trend Agent" # Tên hiển thị của webhook khi đăng bài
+DISCORD_SUPPRESS_EMBEDS_FLAG: int = 4    # Bitflag SUPPRESS_EMBEDS — tắt unfurl link (card rác)
 
 # --- STORAGE CONFIG ---
 OUTPUT_DIR: str = "data"             # Thư mục lưu file CSV
