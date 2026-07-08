@@ -66,6 +66,6 @@ async def test_cleaner_agent_execute():
     
     # Đảm bảo bài báo rỗng và bài báo trùng lặp đã bị loại bỏ
     assert len(updated_ctx.articles) == 1
-    assert updated_ctx.articles[0].title == "apple công bố chip mới"
+    assert updated_ctx.articles[0].title == "Apple công bố chip mới"
     assert "#Apple" in updated_ctx.articles[0].tags
     assert cleaner_agent.total_cleaned == 1
