@@ -51,14 +51,19 @@ class ScraperAgent(BaseAgent):
         return ctx
 
     async def _fetch_newsapi(self, client: httpx.AsyncClient, api_key: str, topic: str) -> list[Article]:
-        url = (
-            f"https://newsapi.org/v2/everything"
-            f"?q={topic}&language=en"
-            f"&pageSize={config.NEWSAPI_PAGE_SIZE}"
-            f"&apiKey={api_key}"
-        )
+        # API key đi qua header, không qua query string: URL bị ghi vào log/proxy/APM.
+        # topic đi qua params= để httpx tự URL-encode khoảng trắng và ký tự đặc biệt.
         try:
-            response = await client.get(url, timeout=config.REQUEST_TIMEOUT)
+            response = await client.get(
+                config.NEWSAPI_URL,
+                params={
+                    "q": topic,
+                    "language": config.NEWSAPI_LANGUAGE,
+                    "pageSize": config.NEWSAPI_PAGE_SIZE,
+                },
+                headers={"X-Api-Key": api_key},
+                timeout=config.REQUEST_TIMEOUT,
+            )
             response.raise_for_status()
             data = response.json()
             if data.get("status") == "ok":
@@ -158,9 +163,12 @@ class ScraperAgent(BaseAgent):
         ]
 
     async def _fetch_google_rss(self, client: httpx.AsyncClient, topic: str) -> list[Article]:
-        url = f"https://news.google.com/rss/search?q={topic}&hl=en-US&gl=US&ceid=US:en"
         try:
-            res = await client.get(url, timeout=config.REQUEST_TIMEOUT)
+            res = await client.get(
+                config.GOOGLE_RSS_URL,
+                params={"q": topic, **config.GOOGLE_RSS_PARAMS},
+                timeout=config.REQUEST_TIMEOUT,
+            )
             res.raise_for_status()
             root = ET.fromstring(res.text)
             articles = []

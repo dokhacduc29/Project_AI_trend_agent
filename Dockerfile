@@ -1,5 +1,5 @@
 # =====================================================================
-# Dockerfile — AI Trend Agent v3.1
+# Dockerfile — AI Trend Agent v4.0
 # Multi-stage build: giảm image size, tách build vs runtime deps
 # =====================================================================
 
@@ -11,16 +11,13 @@ FROM python:3.13-slim AS builder
 WORKDIR /install
 
 # Chỉ copy requirements trước để tận dụng Docker layer cache
-COPY Backend/requirements.txt .
+# requirements-runtime.txt = nguồn sự thật DUY NHẤT cho deps của image.
+# Dev-only libs (pytest, dashboard) nằm ở requirements.txt và không vào đây.
+COPY Backend/requirements-runtime.txt .
 
-# Loại bỏ dev-only libs trước khi cài (pytest, streamlit không cần trong prod)
 # --no-cache-dir: không lưu pip cache vào image
 # --prefix: cài vào /install thay vì system site-packages
-RUN pip install --no-cache-dir --prefix=/install \
-    httpx==0.28.1 \
-    python-dotenv==1.2.2 \
-    google-generativeai \
-    supabase==2.11.0
+RUN pip install --no-cache-dir --prefix=/install -r requirements-runtime.txt
 
 
 # ──────────────────────────────────────────────
@@ -30,7 +27,7 @@ FROM python:3.13-slim AS runtime
 
 # Metadata
 LABEL maintainer="dokhacduc29" \
-      version="3.1.0" \
+      version="4.0.0" \
       description="AI Trend Agent - automated AI news pipeline"
 
 # Tạo non-root user để chạy app (security best practice)

@@ -47,3 +47,12 @@ k8s/01-secret.yaml
 Backend/data/
 Backend/quick_test.py
 Backend/test_supabase_connection.py
+
+# 10. GIT WORKTREES do Claude Code tạo: bản sao cục bộ của repo, KHÔNG phải mã nguồn
+# Từng có 54 file của một worktree cũ bị commit nhầm — untrack ở commit này.
+.claude/worktrees/
+
+# 11. TEST ARTIFACTS: báo cáo coverage sinh khi chạy pytest
+.coverage
+.pytest_cache/
+htmlcov/

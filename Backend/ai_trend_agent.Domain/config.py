@@ -12,7 +12,11 @@ TẠI SAO CẦN FILE NÀY?
 
 # --- SCRAPER CONFIG ---
 REQUEST_TIMEOUT: float = 10.0       # Giây chờ tối đa cho mỗi API call
+NEWSAPI_URL: str = "https://newsapi.org/v2/everything"  # Endpoint tìm kiếm bài viết
 NEWSAPI_PAGE_SIZE: int = 10          # Số bài tối đa lấy từ NewsAPI mỗi lần
+NEWSAPI_LANGUAGE: str = "en"         # Ngôn ngữ bài viết yêu cầu NewsAPI trả về
+GOOGLE_RSS_URL: str = "https://news.google.com/rss/search"  # Endpoint RSS tìm kiếm
+GOOGLE_RSS_PARAMS: dict[str, str] = {"hl": "en-US", "gl": "US", "ceid": "US:en"}  # Locale cố định cho RSS
 REDDIT_LIMIT: int = 5               # Số bài tối đa lấy từ Reddit
 REDDIT_SUBREDDIT: str = "ArtificialIntelligence"  # Tên subreddit ĐÚNG CHÍNH TẢ
 GOOGLE_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ Google News RSS
