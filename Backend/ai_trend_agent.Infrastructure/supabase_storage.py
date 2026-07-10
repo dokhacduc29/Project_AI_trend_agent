@@ -19,6 +19,12 @@ from models import Article, PipelineContext
 class SupabaseStorageAgent(BaseAgent):
     """Lính hậu cần — Lưu trữ dữ liệu lên Supabase PostgreSQL."""
 
+    # [ADR 0003 + 0010] Critical: lưu hỏng thì đừng đăng.
+    # Dedupe của toàn hệ thống dựa vào constraint UNIQUE(url) trên bảng này.
+    # Storage chết mà pipeline vẫn đi tiếp → DiscordAgent đăng bài không được
+    # lưu, và chu kỳ sau đăng lại y hệt vì không còn gì để đối chiếu url.
+    is_critical = True
+
     def __init__(self, **kwargs):
         super().__init__("SupabaseStorageAgent")
         self._client: Client | None = None
@@ -62,10 +68,10 @@ class SupabaseStorageAgent(BaseAgent):
         rows = [self._article_to_row(art, ctx.topic) for art in ctx.articles]
         self.log_info(f"Đang lưu {len(rows)} bài lên Supabase...")
 
-        try:
-            inserted = await asyncio.to_thread(self._insert_sync, rows)
-            self.log_info(f"Đã lưu thành công {inserted} bài mới vào Supabase.")
-        except Exception as e:
-            self.log_error(f"Lỗi khi lưu Supabase: {e}")
+        # KHÔNG bọc try/except ở đây: agent này là critical, để lỗi nổi lên cho
+        # run_pipeline dừng chu kỳ. Nuốt lỗi tại chỗ sẽ vô hiệu hoá is_critical
+        # và biến "mất toàn bộ dữ liệu" thành một dòng log không ai đọc.
+        inserted = await asyncio.to_thread(self._insert_sync, rows)
+        self.log_info(f"Đã lưu thành công {inserted} bài mới vào Supabase.")
 
         return ctx
