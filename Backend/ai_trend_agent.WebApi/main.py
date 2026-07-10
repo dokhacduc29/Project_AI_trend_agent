@@ -31,6 +31,11 @@ for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_a
     if layer_dir not in sys.path:
         sys.path.insert(0, layer_dir)
 
+# Che secret trong log (webhook Discord, apiKey...) TRƯỚC mọi lời gọi mạng.
+# httpx log nguyên URL ở mức INFO — xem log_redaction.py.
+from log_redaction import install_secret_redaction
+install_secret_redaction()
+
 # Import base_agent TRƯỚC để Factory sẵn sàng
 from base_agent import BaseAgent, AgentFactory
 from models import PipelineContext
