@@ -28,39 +28,52 @@ nên mọi thứ vẫn chạy. Ngắt sau session 4 thì repo nửa cũ nửa m�
 
 Xếp theo mức nghiêm trọng, không theo session.
 
-**1. Xoay webhook Discord.** Webhook cũ đã in ra log 4 lần mỗi chu kỳ trước khi có
-ADR 0009. Bản vá chặn rò tương lai, không thu hồi được cái đã lộ. Discord →
-Channel Settings → Integrations → Webhooks → xoá + tạo lại → cập nhật `.env`.
-
-**2. `main.py` thoát exit code 0 khi thiếu API key.** Hiện chỉ gây restart âm thầm
+**1. `main.py` thoát exit code 0 khi thiếu API key.** Hiện chỉ gây restart âm thầm
 dưới `Deployment`. Nhưng sau Session 2, K8s sẽ đánh dấu Job là **Succeeded**,
 `restartPolicy: OnFailure` không kích hoạt, dashboard xanh trong khi pipeline
 chết. **Phải sửa ở đầu Session 2, trước khi viết CronJob YAML.**
 
-**3. Reddit chết âm thầm.** `REDDIT_CLIENT_ID` và `REDDIT_CLIENT_SECRET` có trong
+**2. Reddit chết âm thầm.** `REDDIT_CLIENT_ID` và `REDDIT_CLIENT_SECRET` có trong
 `.env` nhưng **rỗng** → code bỏ qua OAuth, rơi xuống kênh công khai, ăn `403` ở cả
 hai endpoint. Pipeline đang chạy trên **2 nguồn, không phải 3**. Không ai báo lỗi
 vì `except` nuốt hết.
 
-**4. Cột `date` chứa ba định dạng trong cùng một cột `text`.** Đo trên 162 dòng:
+**3. Cột `date` chứa ba định dạng trong cùng một cột `text`.** Đo trên 162 dòng:
 80 dòng RFC822 (`Mon, 29 Jun 2026`, từ Google RSS), 72 dòng ISO (`2026-06-28`, từ
 NewsAPI), 10 dòng `N/A`. Không sắp xếp theo thời gian được, không truy vấn "7 ngày
 qua" được. Cần chuẩn hoá về `timestamptz` + migration.
 
-**5. 153/162 title bị lowercase vĩnh viễn.** Commit `f612979` sửa cleaner để giữ
+**4. 153/162 title bị lowercase vĩnh viễn.** Commit `f612979` sửa cleaner để giữ
 nguyên chữ hoa, nhưng `upsert(on_conflict="url", ignore_duplicates=True)` bỏ qua
 dòng cũ, không cập nhật. Cần migration nếu muốn sửa.
 
-**6. `HEALTHCHECK` giả trong `Dockerfile`.** Chỉ kiểm tra một file có tồn tại —
+**5. `HEALTHCHECK` giả trong `Dockerfile`.** Chỉ kiểm tra một file có tồn tại —
 luôn đúng. Event loop treo, probe vẫn PASS. Sẽ tự biến mất ở Session 2: pod của
 `CronJob` sống vài chục giây, `livenessProbe` gần như vô nghĩa; thay bằng
 `activeDeadlineSeconds` + `backoffLimit`.
 
-**7. `pandas` và `streamlit` là deps chết.** Không được import ở bất kỳ đâu trong
+**6. `pandas` và `streamlit` là deps chết.** Không được import ở bất kỳ đâu trong
 `Backend/`. Còn nằm trong `requirements.txt`.
 
-**8. Disable legacy JWT API keys** trên Supabase. Chỉ bấm sau khi pipeline đã chạy
+**7. Disable legacy JWT API keys** trên Supabase. Chỉ bấm sau khi pipeline đã chạy
 xanh vài chu kỳ bằng `sb_secret_`.
+
+## Rủi ro đã chấp nhận
+
+**Webhook Discord hiện tại không được xoay.** Nó đã bị `httpx` in ra log 4 lần
+mỗi chu kỳ trước khi có `SecretRedactingFilter` (ADR 0009), nên phải coi là đã
+lộ. Quyết định ngày 2026-07-10: **chấp nhận**, vì kênh đích là server Discord cá
+nhân dùng để test, chưa công bố, không có người đọc. Thiệt hại tối đa nếu bị lạm
+dụng là spam vào chính kênh test đó.
+
+**Điều kiện kèm theo — bắt buộc**: phải xoay webhook **trước** khi kênh này (hoặc
+chính webhook này) được dùng cho bất kỳ server nào có người đọc thật. Rủi ro được
+chấp nhận cho *bối cảnh hiện tại*, không phải cho mọi bối cảnh tương lai. Việc
+kênh test lặng lẽ trở thành kênh thật là cách thường gặp nhất để một rủi ro đã
+chấp nhận biến thành một sự cố.
+
+Cách xoay: Discord → Channel Settings → Integrations → Webhooks → xoá + tạo lại →
+cập nhật `DISCORD_WEBHOOK_URL` trong `.env`.
 
 ## Nguyên tắc kiểm chứng
 

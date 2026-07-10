@@ -37,8 +37,12 @@ Tóm tắt — chi tiết xem ADR:
 Kiểm chứng bằng một chu kỳ production thật trong container: 49 giây, 12 bài thô →
 11 bài sạch, 5/12 lời gọi Gemini, ghi 3 dòng Supabase, gửi 4 tin nhắn Discord.
 
-**Còn treo, ưu tiên cao**: xoay webhook Discord (đã lộ trong log trước ADR 0009);
-`main.py` thoát exit code 0 khi thiếu key — phải sửa trước khi viết CronJob.
+**Còn treo, ưu tiên cao**: `main.py` thoát exit code 0 khi thiếu key — phải sửa
+trước khi viết CronJob, nếu không K8s sẽ báo Job `Succeeded` cho một chu kỳ chưa
+làm gì.
+
+**Rủi ro đã chấp nhận**: webhook Discord không xoay (server test cá nhân, chưa
+công bố). Phải xoay trước khi kênh có người đọc thật — xem `hardening-plan.md`.
 
 ## [2026-06-30] Hardening + Pivot Publisher (Phase 6)
 
