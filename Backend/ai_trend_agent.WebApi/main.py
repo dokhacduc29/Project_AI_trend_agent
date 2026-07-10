@@ -117,9 +117,13 @@ async def main():
     gemini_api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
-        logging.error("Thieu NEWS_API_KEY trong file .env!")
-        return
+        # [Session 2] Thiếu key bắt buộc là lỗi cấu hình chí mạng, KHÔNG phải kết
+        # thúc bình thường. Phải thoát non-zero để CronJob đánh dấu Job Failed
+        # (nếu return/exit 0, K8s coi là Succeeded → dashboard xanh dù pipeline chết).
+        logging.error("Thieu NEWS_API_KEY trong file .env! Thoat voi exit code loi cau hinh.")
+        sys.exit(config.EXIT_CONFIG_ERROR)
     if not gemini_api_key:
+        # GEMINI_API_KEY chỉ làm degrade (enrichment), không chí mạng → cảnh báo, chạy tiếp.
         logging.warning("Thieu GEMINI_API_KEY. Chuc nang AI se bi bo qua!")
 
     logging.info("AI TREND AGENT v3.1 (SOLID Edition)")
@@ -203,7 +207,9 @@ if __name__ == "__main__":
         pr.enable()
         try:
             asyncio.run(main())
-        except (KeyboardInterrupt, SystemExit):
+        except KeyboardInterrupt:
+            # Ctrl+C là thoát bình thường; nhưng KHÔNG nuốt SystemExit — exit code
+            # lỗi cấu hình phải lọt ra ngoài (finally vẫn chạy, in stats trước khi thoát).
             pass
         finally:
             pr.disable()

@@ -37,6 +37,12 @@ GEMINI_APPROX_CHARS_PER_TOKEN: int = 4 # Ước lượng token đầu vào ~ len
 SCHEDULE_INTERVAL_HOURS: int = 4    # Chu kỳ quét tự động (giờ)
 MAX_TOPIC_LENGTH: int = 50          # Độ dài tối đa từ khóa tìm kiếm
 
+# --- EXIT CODES (Session 2 — CronJob cần exit code THẬT để phân biệt Succeeded/Failed) ---
+# Dưới Deployment, exit code chỉ gây restart âm thầm. Dưới CronJob thì exit 0 = Job
+# Succeeded (dashboard xanh dù pipeline chết), exit != 0 = Job Failed (kích backoffLimit).
+EXIT_OK: int = 0                    # Chu kỳ hoàn tất bình thường
+EXIT_CONFIG_ERROR: int = 78        # Thiếu config bắt buộc (vd NEWS_API_KEY). 78 = EX_CONFIG (sysexits.h)
+
 # --- AI CONFIG (PHASE 4) ---
 GEMINI_MODEL_NAME: str = "gemini-2.5-flash" # Mô hình tối ưu tốc độ/chi phí
 AI_MAX_ARTICLES_PER_BATCH: int = 15         # Số bài tối đa gửi AI mỗi lần để tránh quá tải
