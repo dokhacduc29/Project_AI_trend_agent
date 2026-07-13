@@ -118,7 +118,7 @@ pytest ai_trend_agent.Tests/ -v
 - [x] Deploy: Docker multi-stage build + Kubernetes (minikube)
 - [x] Hardening: pipeline resilience (ADR 0003), externalize prompts (ADR 0004), Gemini budget (ADR 0005), eval suite (ADR 0006)
 - [x] Phase 6: Discord publisher qua webhook (ADR 0007 — pivot từ Telegram)
-- [ ] CI/CD: GitHub Actions pipeline
+- [x] CI/CD: GitHub Actions pipeline (ADR 0013 — test→build→smoke→Trivy→push GHCR)
 
 Chi tiết: `.claude/skills/roadmap/SKILL.md`.
 

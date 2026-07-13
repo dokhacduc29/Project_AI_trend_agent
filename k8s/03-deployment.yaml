@@ -42,11 +42,20 @@ spec:
           # Job chạy 1 lần rồi thoát; lỗi thì restart pod (OnFailure), KHÔNG Always
           # (Always cấm dùng trong Job — pod thành công cũng bị restart vô nghĩa).
           restartPolicy: OnFailure
+          # [ADR 0013] GHCR package để PRIVATE → cần credential mới kéo được image.
+          # Tạo secret một lần: kubectl create secret docker-registry regcred ...
+          # (chi tiết trong docs/03-engineering/ci-cd.md). Nếu đổi package sang public
+          # thì bỏ khối imagePullSecrets này đi.
+          imagePullSecrets:
+            - name: regcred
           containers:
             - name: ai-trend-agent
-              image: ai-trend-agent:v4
-              # Dùng image build local (Docker Desktop/minikube dùng chung daemon)
-              imagePullPolicy: Never
+              # [ADR 0013] Image do CI/CD build → push GHCR (thay cho build local cũ).
+              # :latest tiện học; production nên pin :sha-<short> để deploy tất định.
+              image: ghcr.io/dokhacduc29/project_ai_trend_agent:latest
+              # IfNotPresent: có sẵn trong node thì dùng, chưa có thì kéo từ GHCR.
+              # (Không dùng Never nữa vì image giờ nằm ở registry, không phải local build.)
+              imagePullPolicy: IfNotPresent
               resources:
                 requests:
                   memory: "256Mi"
