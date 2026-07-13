@@ -57,9 +57,11 @@ ENV PYTHONUNBUFFERED=1 \
 # Chạy với non-root user
 USER appuser
 
-# Healthcheck — kiểm tra process còn sống
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import os; exit(0 if os.path.exists('/app/ai_trend_agent.WebApi/main.py') else 1)"
+# [ADR 0011] KHÔNG có HEALTHCHECK.
+# Container này là job one-shot (chạy 1 chu kỳ rồi thoát), không phải service.
+# HEALTHCHECK cũ chỉ kiểm tra một file tồn tại — luôn PASS kể cả khi event loop
+# treo, nên là tín hiệu giả. Với job ngắn, "sống/chết" do exit code quyết định,
+# và K8s CronJob dùng activeDeadlineSeconds + backoffLimit thay cho probe.
 
 # Entry point: chạy app
 CMD ["python", "ai_trend_agent.WebApi/main.py"]

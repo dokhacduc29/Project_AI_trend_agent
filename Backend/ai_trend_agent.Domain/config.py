@@ -42,6 +42,7 @@ MAX_TOPIC_LENGTH: int = 50          # Độ dài tối đa từ khóa tìm kiế
 # Succeeded (dashboard xanh dù pipeline chết), exit != 0 = Job Failed (kích backoffLimit).
 EXIT_OK: int = 0                    # Chu kỳ hoàn tất bình thường
 EXIT_CONFIG_ERROR: int = 78        # Thiếu config bắt buộc (vd NEWS_API_KEY). 78 = EX_CONFIG (sysexits.h)
+EXIT_PIPELINE_ERROR: int = 1       # Chu kỳ chạy nhưng agent CRITICAL lỗi (scrape/storage chết) → CronJob đánh dấu Failed
 
 # --- AI CONFIG (PHASE 4) ---
 GEMINI_MODEL_NAME: str = "gemini-2.5-flash" # Mô hình tối ưu tốc độ/chi phí
