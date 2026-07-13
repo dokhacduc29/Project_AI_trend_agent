@@ -14,4 +14,9 @@ google-genai==2.7.0     # SDK Gemini MỚI, cung cấp `from google import genai
                         # nếu chưa chạy hết một chu kỳ pipeline: code gọi
                         # `client.aio.models.generate_content()` — API surface phải được
                         # kiểm chứng trước, không suy đoán từ việc `import` thành công.
-supabase==2.11.0        # Client Supabase PostgreSQL — supabase_storage
+supabase==2.31.0        # Client Supabase PostgreSQL — supabase_storage.
+                        # Nâng 2.11.0 -> 2.31.0 (ADR 0012): 2.11.0 kiểm tra key
+                        # phải là JWT ở create_client() -> chối key sb_secret_ mới
+                        # (ADR 0010) với "Invalid API key", dù server nhận key đó
+                        # (REST thô trả 200). 2.31.0 bỏ check đó. Đã verify: create_client
+                        # nhận sb_secret_ + upsert(on_conflict,ignore_duplicates) chạy đúng.

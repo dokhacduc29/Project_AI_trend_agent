@@ -1,64 +1,87 @@
-apiVersion: apps/v1
-kind: Deployment
+# =====================================================================
+# CronJob — AI Trend Agent (ADR 0011: pivot từ Deployment)
+# =====================================================================
+# TẠI SAO CronJob chứ không Deployment?
+#   Đây là pipeline ETL chạy theo CHU KỲ, không phải service sống mãi.
+#   Deployment + `while True` trong app khiến K8s không bao giờ biết "một lần
+#   chạy" thành công hay thất bại: pod cứ sống, exit code chẳng bao giờ lọt ra.
+#   CronJob: K8s lên lịch, app chạy 1 chu kỳ rồi thoát, exit code → Succeeded/Failed.
+# Tên file giữ nguyên 03-deployment.yaml để không phá thứ tự apply 00→04.
+# =====================================================================
+apiVersion: batch/v1
+kind: CronJob
 metadata:
   name: ai-trend-agent
   namespace: ai-trend-agent
   labels:
     app: ai-trend-agent
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ai-trend-agent
-  template:
-    metadata:
-      labels:
-        app: ai-trend-agent
+  # Mỗi 4 giờ — KHỚP với config.SCHEDULE_INTERVAL_HOURS=4. Đổi lịch sửa ở ĐÂY,
+  # không sửa trong app (app giờ one-shot, không tự lên lịch).
+  schedule: "0 */4 * * *"
+  # Chu kỳ trước chưa xong thì BỎ QUA chu kỳ mới — không chạy chồng. Dedupe theo
+  # UNIQUE(url) và budget Gemini đều giả định đúng 1 chu kỳ tại một thời điểm.
+  concurrencyPolicy: Forbid
+  # Lỡ giờ (cluster ngủ/nghẽn) quá 300s thì bỏ chu kỳ đó, không chạy bù dồn.
+  startingDeadlineSeconds: 300
+  # Giữ lịch sử để debug: 3 job thành công gần nhất, 1 job lỗi gần nhất.
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
     spec:
-      containers:
-        - name: ai-trend-agent
-          image: ai-trend-agent:v3
-          # Dùng image từ local minikube (không cần push lên registry)
-          imagePullPolicy: Never
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "250m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-          # Load non-secret config từ ConfigMap
-          envFrom:
-            - configMapRef:
-                name: ai-trend-agent-config
-          # Load secrets từ Secret (override nếu trùng key với ConfigMap)
-          env:
-            - name: NEWS_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-trend-agent-secrets
-                  key: NEWS_API_KEY
-            - name: GEMINI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-trend-agent-secrets
-                  key: GEMINI_API_KEY
-            - name: SUPABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: ai-trend-agent-secrets
-                  key: SUPABASE_URL
-            - name: SUPABASE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-trend-agent-secrets
-                  key: SUPABASE_KEY
-          livenessProbe:
-            exec:
-              command:
-                - python
-                - -c
-                - "import os; exit(0 if os.path.exists('/app/ai_trend_agent.WebApi/main.py') else 1)"
-            initialDelaySeconds: 30
-            periodSeconds: 60
-      restartPolicy: Always
+      # Job tự chết sau 10 phút dù còn chạy — chặn event loop treo vô hạn. Đây là
+      # cái THAY THẾ livenessProbe giả cũ: probe trên job vài chục giây là vô nghĩa.
+      activeDeadlineSeconds: 600
+      # Lỗi thì thử lại tối đa 2 lần rồi mới đánh dấu Job Failed.
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: ai-trend-agent
+        spec:
+          # Job chạy 1 lần rồi thoát; lỗi thì restart pod (OnFailure), KHÔNG Always
+          # (Always cấm dùng trong Job — pod thành công cũng bị restart vô nghĩa).
+          restartPolicy: OnFailure
+          containers:
+            - name: ai-trend-agent
+              image: ai-trend-agent:v4
+              # Dùng image build local (Docker Desktop/minikube dùng chung daemon)
+              imagePullPolicy: Never
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+              # Load non-secret config từ ConfigMap
+              envFrom:
+                - configMapRef:
+                    name: ai-trend-agent-config
+              # Load secrets từ Secret (override nếu trùng key với ConfigMap)
+              env:
+                - name: NEWS_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-trend-agent-secrets
+                      key: NEWS_API_KEY
+                - name: GEMINI_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-trend-agent-secrets
+                      key: GEMINI_API_KEY
+                - name: SUPABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-trend-agent-secrets
+                      key: SUPABASE_URL
+                - name: SUPABASE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-trend-agent-secrets
+                      key: SUPABASE_KEY
+                - name: DISCORD_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-trend-agent-secrets
+                      key: DISCORD_WEBHOOK_URL

@@ -1,6 +1,6 @@
 """
 =====================================================================
-AI TREND AGENT v3.1 — SOLID Edition
+AI TREND AGENT v4.0 — SOLID Edition
 =====================================================================
 FIX LIST:
     - [DIP] run_pipeline nhận BaseAgent thay vì concrete class
@@ -63,16 +63,20 @@ def validate_topic(user_input: str) -> str | None:
     return clean_topic[:config.MAX_TOPIC_LENGTH]
 
 
-async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext):
+async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext) -> bool:
     """
     [FIX DIP] Nhận danh sách BaseAgent (abstraction), KHÔNG nhận concrete class.
-    
+
     Nhờ đó, bạn có thể swap bất kỳ Agent nào mà KHÔNG sửa hàm này:
         - Thay StorageAgent bằng DatabaseStorageAgent? Được!
         - Thêm TelegramAgent vào cuối pipeline? Được!
-    
+
     [FIX LSP] Vì execute() giờ có CÙNG chữ ký (ctx → ctx),
     ta có thể duyệt vòng lặp qua MỌI loại Agent một cách đồng nhất.
+
+    [ADR 0011] Trả về True nếu chu kỳ đi hết pipeline, False nếu một agent
+    CRITICAL lỗi giữa chừng. Dưới CronJob, giá trị này quyết định exit code:
+    False → non-zero → Job Failed → backoffLimit. Không còn while True nuốt kết quả.
     """
     logging.info("=" * 60)
     logging.info(f"KHOI DONG CHU KY QUET: '{ctx.topic.upper()}'")
@@ -92,7 +96,7 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext):
             # đã cào/đã lưu ở các bước trước (no silent abort của cả pipeline).
             if getattr(agent, "is_critical", False):
                 logging.error(f"[CRITICAL] {agent.agent_name} loi: {e}. Dung chu ky.")
-                return
+                return False
             logging.error(f"[ENRICHMENT] {agent.agent_name} loi: {e}. Bo qua, pipeline di tiep.")
             continue
 
@@ -103,6 +107,7 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext):
         f"| ~input_tokens={b['approx_input_tokens']} | blocked={b['blocked']}"
     )
     logging.info("=" * 60 + "\n")
+    return True
 
 
 async def main():
@@ -126,7 +131,7 @@ async def main():
         # GEMINI_API_KEY chỉ làm degrade (enrichment), không chí mạng → cảnh báo, chạy tiếp.
         logging.warning("Thieu GEMINI_API_KEY. Chuc nang AI se bi bo qua!")
 
-    logging.info("AI TREND AGENT v3.1 (SOLID Edition)")
+    logging.info("AI TREND AGENT v4.0 (SOLID Edition)")
 
     # [CONTAINER] Đọc topic từ env var TOPIC (dùng trong Docker/K8s).
     # Nếu không có, fallback sang interactive stdin (dùng khi chạy local).
@@ -169,10 +174,12 @@ async def main():
     for agent in agents:
         logging.info(f"Da trien khai: {agent}")
 
-    # Vòng lặp chính — FULL ASYNC, không cần thư viện schedule
-    interval_seconds = config.SCHEDULE_INTERVAL_HOURS * 3600
-    logging.info(f"AGENT TRUC CANH ({config.SCHEDULE_INTERVAL_HOURS} gio/lan)")
-    logging.info("Nhan [Ctrl + C] de tat he thong.")
+    # [ADR 0011] Mô hình ONE-SHOT: chạy ĐÚNG MỘT chu kỳ rồi thoát.
+    # Việc lặp lại mỗi 4 giờ giờ là trách nhiệm của CronJob (schedule:
+    # "0 */4 * * *" trong k8s/03-deployment.yaml), KHÔNG phải while True trong app.
+    # Lý do: dưới CronJob, một pod sống-mãi là sai mô hình — K8s không biết khi nào
+    # "một lần chạy" thành công. App làm 1 đơn vị việc, orchestrator lo việc lặp.
+    logging.info(f"Che do ONE-SHOT (CronJob lo lich {config.SCHEDULE_INTERVAL_HOURS}h/lan).")
 
     # Chờ DNS/network sẵn sàng trong môi trường container (K8s pod start)
     startup_delay = int(os.getenv("STARTUP_DELAY_SECONDS", "0"))
@@ -180,21 +187,21 @@ async def main():
         logging.info(f"Cho {startup_delay}s de DNS san sang...")
         await asyncio.sleep(startup_delay)
 
-    try:
-        while True:
-            # Tạo context MỚI cho mỗi chu kỳ (tránh articles bị dồn từ chu kỳ trước)
-            ctx = PipelineContext(
-                topic=ctx_template.topic, 
-                api_key=ctx_template.api_key,
-                gemini_api_key=ctx_template.gemini_api_key
-            )
-            await run_pipeline(agents, ctx)
-            logging.info(f"Ngu {config.SCHEDULE_INTERVAL_HOURS} gio roi quet tiep...")
-            await asyncio.sleep(interval_seconds)
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        logging.info("=" * 60)
-        logging.info("DANG TAT HE THONG AN TOAN...")
-        logging.info("=" * 60)
+    # Context MỚI cho chu kỳ này (không còn nguy cơ dồn articles vì chỉ chạy 1 lần)
+    ctx = PipelineContext(
+        topic=ctx_template.topic,
+        api_key=ctx_template.api_key,
+        gemini_api_key=ctx_template.gemini_api_key,
+    )
+    completed = await run_pipeline(agents, ctx)
+
+    # [ADR 0011] Agent critical lỗi → chu kỳ CHƯA hoàn tất → thoát non-zero để
+    # CronJob đánh dấu Job Failed (kích backoffLimit), thay vì Succeeded âm thầm.
+    if not completed:
+        logging.error("Chu ky KHONG hoan tat (agent critical loi). Thoat non-zero.")
+        sys.exit(config.EXIT_PIPELINE_ERROR)
+
+    logging.info("Chu ky hoan tat. Thoat 0.")
 
 
 if __name__ == "__main__":

@@ -18,6 +18,8 @@ tóm tắt và liên kết, không kể lại (tuân thủ rule *single source*)
 | [0008](../../knowledge/decisions/0008-container-runtime-correctness.md) | Container runtime correctness: một nguồn sự thật cho deps | 2026-07-10 |
 | [0009](../../knowledge/decisions/0009-secret-hygiene.md) | Secret hygiene: không trong URL, không trong log, không trong git | 2026-07-10 |
 | [0010](../../knowledge/decisions/0010-supabase-rls-secret-key.md) | Khoá bảng Supabase: secret key + RLS; storage thành critical | 2026-07-10 |
+| [0011](../../knowledge/decisions/0011-cronjob-oneshot.md) | `Deployment`+`while True` → `CronJob` one-shot; exit code thật | 2026-07-13 |
+| [0012](../../knowledge/decisions/0012-supabase-client-upgrade.md) | Nâng supabase-py 2.11→2.31 để nhận key `sb_secret_` | 2026-07-13 |
 
 ## [2026-07-10] Hardening Tier A — container boot được lần đầu
 

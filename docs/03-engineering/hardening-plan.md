@@ -12,7 +12,8 @@
 | 1 | Sửa SDK Dockerfile, `requirements-runtime.txt`, untrack worktree, NewsAPI header | ✅ `5fb6783` |
 | — | Che secret trong log (`SecretRedactingFilter`) | ✅ `0de1e57` |
 | — | Supabase: `sb_secret_` + bật RLS, storage thành critical | ✅ (ADR 0010) |
-| 2 | `Deployment` + `while True` → `CronJob`; `main.py` chạy 1 chu kỳ rồi thoát | ⬜ |
+| 2 | `Deployment` + `while True` → `CronJob`; `main.py` chạy 1 chu kỳ rồi thoát | ✅ `566e490` (ADR 0011) |
+| — | Nâng supabase-py 2.11→2.31 (2.11 chối key `sb_secret_`) | ✅ `a97d996` (ADR 0012) |
 | 3 | Structured logging: JSON formatter, thêm `cycle_id`/`topic`/`agent` | ⬜ |
 | 4 | Tạo package `ai_trend_agent/`, chuyển `domain/` + `application/`, giữ shim | ⬜ |
 | 5 | Chuyển `infrastructure/` + `webapi/` + `tests/`, xoá 15 `sys.path` | ⬜ |
@@ -55,8 +56,17 @@ luôn đúng. Event loop treo, probe vẫn PASS. Sẽ tự biến mất ở Sess
 **6. `pandas` và `streamlit` là deps chết.** Không được import ở bất kỳ đâu trong
 `Backend/`. Còn nằm trong `requirements.txt`.
 
-**7. Disable legacy JWT API keys** trên Supabase. Chỉ bấm sau khi pipeline đã chạy
-xanh vài chu kỳ bằng `sb_secret_`.
+**7. Disable legacy JWT API keys** trên Supabase. **Giờ an toàn để làm** — sau ADR
+0012, pipeline đã chạy xanh trong K8s bằng `sb_secret_` (Supabase `201 Created`),
+không còn phụ thuộc key JWT cũ.
+
+**8. Key Gemini đang chạy FREE tier, không phải Pro.** Chu kỳ verify Session 2 ăn
+`429 RESOURCE_EXHAUSTED` với `quotaId: GenerateRequestsPerDayPerProjectPerModel-
+FreeTier`, `quotaValue: 20` (20 request/ngày cho `gemini-2.5-flash`). Trái với giả
+định "đã đăng ký Pro". `GEMINI_API_KEY` trong `.env` **không gắn với gói trả phí** —
+cần kiểm Google AI Studio / Cloud billing. Pipeline vẫn degrade đúng khi hết quota
+(Gemini là enrichment, retry → fallback), nhưng bò chậm vì backoff ~60s/lần và có
+thể chạm `activeDeadlineSeconds` của CronJob. Không phải lỗi code.
 
 ## Rủi ro đã chấp nhận
 
