@@ -15,6 +15,34 @@ tóm tắt và liên kết, không kể lại (tuân thủ rule *single source*)
 | [0005](../../knowledge/decisions/0005-gemini-budget.md) | Budget enforcement cho lời gọi Gemini | 2026-06-30 |
 | [0006](../../knowledge/decisions/0006-eval-suite.md) | Eval suite cho parser & robustness output AI | 2026-06-30 |
 | [0007](../../knowledge/decisions/0007-discord-pivot.md) | Chuyển publisher Telegram → Discord (webhook) | 2026-06-30 |
+| [0008](../../knowledge/decisions/0008-container-runtime-correctness.md) | Container runtime correctness: một nguồn sự thật cho deps | 2026-07-10 |
+| [0009](../../knowledge/decisions/0009-secret-hygiene.md) | Secret hygiene: không trong URL, không trong log, không trong git | 2026-07-10 |
+| [0010](../../knowledge/decisions/0010-supabase-rls-secret-key.md) | Khoá bảng Supabase: secret key + RLS; storage thành critical | 2026-07-10 |
+
+## [2026-07-10] Hardening Tier A — container boot được lần đầu
+
+Lộ trình đầy đủ + nợ kỹ thuật còn treo: [`docs/03-engineering/hardening-plan.md`](../03-engineering/hardening-plan.md).
+
+Tóm tắt — chi tiết xem ADR:
+- **Container (0008)**: `Dockerfile` cài SDK sai (`google-generativeai`) trong khi
+  code dùng `google-genai` → image **chưa từng boot được**. Tách
+  `requirements-runtime.txt`, pin `google-genai==2.7.0` (version đã chạy thật).
+- **Secret hygiene (0009)**: NewsAPI key rời khỏi query string sang header
+  `X-Api-Key`; `SecretRedactingFilter` che token webhook trong log mà vẫn giữ
+  dòng chẩn đoán.
+- **Supabase (0010)**: bảng `articles` từng mở toang (anon key + RLS tắt) →
+  `sb_secret_` + bật RLS không policy. `SupabaseStorageAgent.is_critical = True`,
+  gỡ `except` nuốt lỗi: lưu hỏng thì đừng đăng.
+
+Kiểm chứng bằng một chu kỳ production thật trong container: 49 giây, 12 bài thô →
+11 bài sạch, 5/12 lời gọi Gemini, ghi 3 dòng Supabase, gửi 4 tin nhắn Discord.
+
+**Còn treo, ưu tiên cao**: `main.py` thoát exit code 0 khi thiếu key — phải sửa
+trước khi viết CronJob, nếu không K8s sẽ báo Job `Succeeded` cho một chu kỳ chưa
+làm gì.
+
+**Rủi ro đã chấp nhận**: webhook Discord không xoay (server test cá nhân, chưa
+công bố). Phải xoay trước khi kênh có người đọc thật — xem `hardening-plan.md`.
 
 ## [2026-06-30] Hardening + Pivot Publisher (Phase 6)
 

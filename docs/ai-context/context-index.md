@@ -7,6 +7,11 @@
 - [Hướng dẫn Agent & Luật Thép](agent-guide.md) — *Rules*: 10 Luật Thép + kỷ luật quy trình
 - [Nhật ký Quyết định & Bộ nhớ](memory-log.md) — *Memory*: trạng thái + index ADR
 
+## Công việc đang làm
+- [Hardening Plan](../03-engineering/hardening-plan.md) — *Where*: lộ trình 9 session,
+  session nào đã xong, nợ kỹ thuật còn treo, rủi ro đã chấp nhận. **Đọc file này để
+  biết bắt đầu từ đâu.**
+
 ## Nguồn sự thật chuyên sâu
 - [Quyết định kiến trúc (ADR)](../../knowledge/decisions/) — nguồn chuẩn của mọi quyết định lớn
 - [CLAUDE.md](../../CLAUDE.md) — file Claude Code auto-load (kiến trúc, Iron Laws, run/debug)

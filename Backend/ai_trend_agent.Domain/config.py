@@ -12,7 +12,11 @@ TẠI SAO CẦN FILE NÀY?
 
 # --- SCRAPER CONFIG ---
 REQUEST_TIMEOUT: float = 10.0       # Giây chờ tối đa cho mỗi API call
+NEWSAPI_URL: str = "https://newsapi.org/v2/everything"  # Endpoint tìm kiếm bài viết
 NEWSAPI_PAGE_SIZE: int = 10          # Số bài tối đa lấy từ NewsAPI mỗi lần
+NEWSAPI_LANGUAGE: str = "en"         # Ngôn ngữ bài viết yêu cầu NewsAPI trả về
+GOOGLE_RSS_URL: str = "https://news.google.com/rss/search"  # Endpoint RSS tìm kiếm
+GOOGLE_RSS_PARAMS: dict[str, str] = {"hl": "en-US", "gl": "US", "ceid": "US:en"}  # Locale cố định cho RSS
 REDDIT_LIMIT: int = 5               # Số bài tối đa lấy từ Reddit
 REDDIT_SUBREDDIT: str = "ArtificialIntelligence"  # Tên subreddit ĐÚNG CHÍNH TẢ
 GOOGLE_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ Google News RSS
@@ -32,6 +36,12 @@ GEMINI_APPROX_CHARS_PER_TOKEN: int = 4 # Ước lượng token đầu vào ~ len
 # --- PIPELINE CONFIG ---
 SCHEDULE_INTERVAL_HOURS: int = 4    # Chu kỳ quét tự động (giờ)
 MAX_TOPIC_LENGTH: int = 50          # Độ dài tối đa từ khóa tìm kiếm
+
+# --- EXIT CODES (Session 2 — CronJob cần exit code THẬT để phân biệt Succeeded/Failed) ---
+# Dưới Deployment, exit code chỉ gây restart âm thầm. Dưới CronJob thì exit 0 = Job
+# Succeeded (dashboard xanh dù pipeline chết), exit != 0 = Job Failed (kích backoffLimit).
+EXIT_OK: int = 0                    # Chu kỳ hoàn tất bình thường
+EXIT_CONFIG_ERROR: int = 78        # Thiếu config bắt buộc (vd NEWS_API_KEY). 78 = EX_CONFIG (sysexits.h)
 
 # --- AI CONFIG (PHASE 4) ---
 GEMINI_MODEL_NAME: str = "gemini-2.5-flash" # Mô hình tối ưu tốc độ/chi phí

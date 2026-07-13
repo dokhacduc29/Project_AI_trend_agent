@@ -1,0 +1,17 @@
+# =====================================================================
+# requirements-runtime.txt — Thư viện CẦN THIẾT để chạy pipeline trong production
+# =====================================================================
+# Đây là nguồn sự thật duy nhất cho Docker image (xem Dockerfile stage builder).
+# requirements.txt = superset dùng cho môi trường dev (thêm pytest, dashboard...).
+#
+# Quy tắc: mọi package ở đây PHẢI được import bởi code trong
+# ai_trend_agent.Domain / .Application / .Infrastructure / .WebApi
+
+httpx==0.28.1           # HTTP bất đồng bộ — scrapers, discord_agent
+python-dotenv==1.2.2    # Nạp .env — main.py
+google-genai==2.7.0     # SDK Gemini MỚI, cung cấp `from google import genai`
+                        # Pin 2.7.0 = version đã chạy thật ở local. KHÔNG nâng lên 2.11.x
+                        # nếu chưa chạy hết một chu kỳ pipeline: code gọi
+                        # `client.aio.models.generate_content()` — API surface phải được
+                        # kiểm chứng trước, không suy đoán từ việc `import` thành công.
+supabase==2.11.0        # Client Supabase PostgreSQL — supabase_storage
