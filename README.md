@@ -120,9 +120,7 @@ Dockerfile · k8s/ · knowledge/decisions/ (13 ADR) · docs/
 
 ---
 
-## Giới hạn đã biết
-
-Ghi thẳng, không giấu:
+## Giới hạn đã biết:
 
 - **Gemini đang ở free tier** (20 request/ngày). Mỗi chu kỳ tốn 4 lời gọi → tối đa ~5 chu kỳ/ngày trước khi `429`. Khi hết quota pipeline degrade đúng (Gemini là enrichment), không sập.
 - **Reddit đang chạy kênh công khai** → thường bị `403`. Cần `REDDIT_CLIENT_ID`/`SECRET` để dùng OAuth; hiện chạy 2/3 nguồn.
