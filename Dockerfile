@@ -25,6 +25,12 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements-runtime.txt
 # ──────────────────────────────────────────────
 FROM python:3.13-slim AS runtime
 
+# Vá CVE OS của base image ngay lúc build. Base python:3.13-slim đọng lại
+# util-linux cũ (CVE-2026-53612..53615, HIGH, đã có bản vá) cho tới khi Docker Hub
+# rebuild base — Trivy chặn HIGH/CRITICAL có bản vá. apt upgrade để không phụ thuộc
+# lịch rebuild của base. Xoá apt lists để không phình image.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # Metadata
 LABEL maintainer="dokhacduc29" \
       version="4.0.0" \
