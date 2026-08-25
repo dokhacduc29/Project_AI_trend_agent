@@ -20,6 +20,10 @@ GOOGLE_RSS_PARAMS: dict[str, str] = {"hl": "en-US", "gl": "US", "ceid": "US:en"}
 REDDIT_LIMIT: int = 5               # Số bài tối đa lấy từ Reddit
 REDDIT_SUBREDDIT: str = "ArtificialIntelligence"  # Tên subreddit ĐÚNG CHÍNH TẢ
 GOOGLE_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ Google News RSS
+# --- CUSTOM RSS SOURCE (thay Reddit — feed cố định, không cần OAuth, không bị 403) ---
+CUSTOM_RSS_URL: str = "https://techcrunch.com/category/artificial-intelligence/feed/"  # Feed AI TechCrunch (đổi được)
+CUSTOM_RSS_SOURCE_NAME: str = "TechCrunch AI"  # Tên hiển thị nguồn khi lưu Article
+CUSTOM_RSS_LIMIT: int = 5           # Số bài tối đa lấy từ custom RSS feed
 REDDIT_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 REDDIT_OAUTH_TOKEN_URL: str = "https://www.reddit.com/api/v1/access_token"  # Endpoint lấy access token
 REDDIT_OAUTH_API_BASE: str = "https://oauth.reddit.com"  # API base khi đã xác thực OAuth
