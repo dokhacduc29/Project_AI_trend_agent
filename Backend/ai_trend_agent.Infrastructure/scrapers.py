@@ -36,7 +36,10 @@ class ScraperAgent(BaseAgent):
         async with httpx.AsyncClient() as client:
             tasks = [
                 self._fetch_newsapi(client, ctx.api_key, ctx.topic),
-                self._fetch_reddit(client),
+                # Reddit thay bằng custom RSS: kênh công khai Reddit bị 403 khi không có
+                # OAuth creds. Muốn bật lại Reddit: thêm REDDIT_CLIENT_ID/SECRET vào .env
+                # rồi đổi dòng dưới thành self._fetch_reddit(client).
+                self._fetch_custom_rss(client),
                 self._fetch_google_rss(client, ctx.topic),
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -161,6 +164,33 @@ class ScraperAgent(BaseAgent):
             )
             for p in posts
         ]
+
+    async def _fetch_custom_rss(self, client: httpx.AsyncClient) -> list[Article]:
+        """
+        Nguồn RSS cố định (thay Reddit). Feed AI ổn định, không cần OAuth, không bị 403.
+        Feed không lọc theo topic — CleanerAgent sẽ chấm điểm liên quan sau, nên chỉ
+        những bài khớp chủ đề mới đi tiếp. Đổi feed ở config.CUSTOM_RSS_URL.
+        """
+        try:
+            res = await client.get(config.CUSTOM_RSS_URL, timeout=config.REQUEST_TIMEOUT)
+            res.raise_for_status()
+            root = ET.fromstring(res.text)
+            articles = []
+            for item in root.findall(".//item")[: config.CUSTOM_RSS_LIMIT]:
+                title = (el.text or "") if (el := item.find("title")) is not None else ""
+                link = (el.text or "") if (el := item.find("link")) is not None else ""
+                pub_date = (el.text or "N/A") if (el := item.find("pubDate")) is not None else "N/A"
+                if title and link:
+                    articles.append(Article(
+                        title=title,
+                        source=config.CUSTOM_RSS_SOURCE_NAME,
+                        date=pub_date[:16],
+                        url=link,
+                    ))
+            return articles
+        except Exception as e:
+            self.log_error(f"Lỗi Custom RSS ({config.CUSTOM_RSS_SOURCE_NAME}): {e}")
+            return []
 
     async def _fetch_google_rss(self, client: httpx.AsyncClient, topic: str) -> list[Article]:
         try:
