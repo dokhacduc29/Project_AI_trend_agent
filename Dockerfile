@@ -45,11 +45,22 @@ WORKDIR /app
 # Copy installed packages từ builder stage
 COPY --from=builder /install /usr/local
 
-# Vá CVE package Python của base image. setuptools 70.3.0 (ship kèm python:3.13-slim)
-# dính CVE-2025-47273 (HIGH, path traversal PackageIndex) — Trivy chặn ở python-pkg,
-# tách biệt với tầng OS. Nâng lên bản có vá; app không dùng setuptools lúc chạy nhưng
-# nó vẫn nằm trong image nên vẫn bị quét.
-RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
+# Vá CVE package Python của base image + gỡ pip khỏi runtime.
+#
+# (1) setuptools 70.3.0 (ship kèm python:3.13-slim) dính CVE-2025-47273 (HIGH, path
+#     traversal PackageIndex). Đây là gói CÀI THẬT (dist-info) nên nâng lên bản có vá.
+#
+# (2) msgpack==1.1.2 + setuptools==70.3.0 KHÔNG hề được cài — chúng chỉ là bản
+#     pip VENDORED (pip/_vendor/vendor.txt + bom.cdx.json). Trivy đọc 2 manifest đó
+#     của pip và báo HIGH (GHSA-6v7p-g79w-8964, CVE-2025-47273) dù gói cài thật đã vá
+#     (msgpack 1.2.1, setuptools 84.0.0). Job one-shot này không cần pip lúc chạy →
+#     gỡ hẳn pip: diệt false-positive TẬN GỐC (không suppress) + giảm attack surface.
+#     Giữ lại setuptools 84.0.0 để pkg_resources còn dùng được cho các lib runtime.
+RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1" \
+    && SP="$(python -c 'import site; print(site.getsitepackages()[0])')" \
+    && rm -rf "${SP}/pip" "${SP}"/pip-*.dist-info /usr/local/bin/pip* \
+    && ! python -c "import pip" 2>/dev/null \
+    && echo "pip removed from runtime image"
 
 # Copy source code (chỉ cần Backend/)
 COPY --chown=appuser:appgroup Backend/ .

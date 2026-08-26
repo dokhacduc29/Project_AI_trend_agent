@@ -69,15 +69,19 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # load: true -> nap image vao docker daemon cua runner de smoke/scan tai cho.
-      # Cache qua GitHub Actions cache (type=gha) de build sau nhanh hon.
+      #
+      # no-cache: true -> KHONG dung layer cache. Day la build lam CONG QUET BAO MAT:
+      # layer `apt-get upgrade` (va cac layer pip) bi Docker cache theo TEXT LENH, nen
+      # neu tai dung se giu goi OS/python cu va Trivy quet nham trang thai CVE loi thoi
+      # (vd openssl 3.5.6 vs ban va 3.5.7). Build tuoi moi lan -> Trivy luon phan anh
+      # dung CVE hien tai. Job nho, tra gia ~1-2 phut la chap nhan duoc.
       - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
           load: true
           tags: ${{ env.IMAGE }}:ci-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
 
       # Smoke 1 — Import closure: moi module runtime phai import duoc trong image
       # that. Bat thieu dependency hoac lech version NGAY o day, khong cho toi runtime.
