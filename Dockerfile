@@ -45,6 +45,12 @@ WORKDIR /app
 # Copy installed packages từ builder stage
 COPY --from=builder /install /usr/local
 
+# Vá CVE package Python của base image. setuptools 70.3.0 (ship kèm python:3.13-slim)
+# dính CVE-2025-47273 (HIGH, path traversal PackageIndex) — Trivy chặn ở python-pkg,
+# tách biệt với tầng OS. Nâng lên bản có vá; app không dùng setuptools lúc chạy nhưng
+# nó vẫn nằm trong image nên vẫn bị quét.
+RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
+
 # Copy source code (chỉ cần Backend/)
 COPY --chown=appuser:appgroup Backend/ .
 
