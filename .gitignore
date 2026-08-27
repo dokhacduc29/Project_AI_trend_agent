@@ -56,3 +56,12 @@ Backend/test_supabase_connection.py
 .coverage
 .pytest_cache/
 htmlcov/
+
+# --- Build artifacts (ADR 0014: pyproject + src-layout) ---
+build/
+dist/
+*.egg-info/
+*.whl
+
+# File tam tu phien lam viec, khong thuoc du an
+claudeignore_run.txt

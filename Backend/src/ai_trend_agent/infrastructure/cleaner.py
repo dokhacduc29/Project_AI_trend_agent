@@ -18,13 +18,11 @@ L09 no magic numbers (→ config.py).
 import re
 import json
 from google import genai
-from base_agent import BaseAgent, AgentFactory
-from models import Article, PipelineContext
-from gemini_client import generate_with_retry
-from prompt_loader import render_prompt
-import config
-
-
+from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
+from ai_trend_agent.domain.models import Article, PipelineContext
+from ai_trend_agent.infrastructure.gemini_client import generate_with_retry
+from ai_trend_agent.application.prompt_loader import render_prompt
+from ai_trend_agent.domain import config
 @AgentFactory.register("cleaner")
 class CleanerAgent(BaseAgent):
     """Lính dọn dẹp — Lọc rác, gán tag (regex + AI), chấm điểm liên quan."""

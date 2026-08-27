@@ -15,8 +15,7 @@ import random
 import asyncio
 from collections.abc import Callable
 from google import genai
-import config
-
+from ai_trend_agent.domain import config
 _RETRYABLE_CODES = ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED")
 _RETRY_DELAY_RE = re.compile(r"retryDelay['\"]:\s*['\"](\d+(?:\.\d+)?)s")
 

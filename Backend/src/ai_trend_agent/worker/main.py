@@ -11,6 +11,7 @@ FIX LIST:
 """
 import os
 import re
+import sys
 import asyncio
 import logging
 from dotenv import load_dotenv
@@ -21,35 +22,52 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-import sys
-# Dynamically add Backend layers to sys.path so direct imports work seamlessly
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_agent.Infrastructure"]:
-    layer_dir = os.path.join(backend_dir, layer)
-    if layer_dir not in sys.path:
-        sys.path.insert(0, layer_dir)
-
 # Che secret trong log (webhook Discord, apiKey...) TRƯỚC mọi lời gọi mạng.
 # httpx log nguyên URL ở mức INFO — xem log_redaction.py.
-from log_redaction import install_secret_redaction
+from ai_trend_agent.application.log_redaction import install_secret_redaction
 install_secret_redaction()
 
 # Import base_agent TRƯỚC để Factory sẵn sàng
-from base_agent import BaseAgent, AgentFactory
-from models import PipelineContext
-from gemini_client import reset_budget, budget_report
-import config
+from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
+from ai_trend_agent.domain.models import PipelineContext
+from ai_trend_agent.infrastructure.gemini_client import reset_budget, budget_report
+from ai_trend_agent.domain import config
 
 # Import các module Agent — decorator @register sẽ TỰ ĐĂNG KÝ vào Factory
-import scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
-import cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
-import ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
-import trend_agent # noqa: F401 — side-effect import (đăng ký "trend" → phân tích xu hướng)
-import supabase_storage  # noqa: F401 — side-effect import (đăng ký "storage" → Supabase)
-import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram" — legacy, không dùng)
-import discord_agent  # noqa: F401 — side-effect import (đăng ký "discord" → publisher hiện hành)
+from ai_trend_agent.infrastructure import scrapers   # noqa: F401 — side-effect import (đăng ký "scraper")
+from ai_trend_agent.infrastructure import cleaner    # noqa: F401 — side-effect import (đăng ký "cleaner")
+from ai_trend_agent.infrastructure import ai_agent   # noqa: F401 — side-effect import (đăng ký "analyzer")
+from ai_trend_agent.infrastructure import trend_agent # noqa: F401 — side-effect import (đăng ký "trend" → phân tích xu hướng)
+from ai_trend_agent.infrastructure import supabase_storage  # noqa: F401 — side-effect import (đăng ký "storage" → Supabase)
+from ai_trend_agent.infrastructure import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram" — legacy, không dùng)
+from ai_trend_agent.infrastructure import discord_agent  # noqa: F401 — side-effect import (đăng ký "discord" → publisher hiện hành)
+
+
+def _load_env_file() -> None:
+    """
+    Nạp `.env` cho môi trường DEV. Không tìm thấy cũng không sao — trong container,
+    biến môi trường đến từ K8s Secret / `--env-file`, không có file `.env` nào.
+
+    [ADR 0014] Bản cũ tính đường dẫn `.env` từ vị trí file nguồn (`backend_dir`).
+    Cách đó chết khi package được CÀI vào site-packages: lúc đó không còn thư mục
+    `Backend/` nào bên cạnh code. Nay dò theo thư mục làm việc — đúng với cả hai
+    kiểu chạy (từ gốc repo, hoặc từ `Backend/`).
+
+    `load_dotenv` KHÔNG ghi đè biến môi trường đã tồn tại, nên biến truyền từ
+    ngoài (K8s, docker run -e) luôn thắng file `.env`.
+    """
+    cwd = os.getcwd()
+    candidates = [
+        os.getenv("ENV_FILE", ""),              # ưu tiên chỉ định tường minh
+        os.path.join(cwd, ".env"),              # chạy từ Backend/
+        os.path.join(cwd, "Backend", ".env"),   # chạy từ gốc repo
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            load_dotenv(path)
+            logging.debug(f"Da nap bien moi truong tu: {path}")
+            return
+    logging.debug("Khong tim thay file .env — dung bien moi truong san co.")
 
 
 def validate_topic(user_input: str) -> str | None:
@@ -116,8 +134,7 @@ async def main():
     Dùng asyncio.sleep() thay cho schedule + time.sleep().
     Loại bỏ dependency 'schedule', loại bỏ antipattern asyncio.run() trong sync wrapper.
     """
-    env_path = os.path.join(backend_dir, ".env")
-    load_dotenv(env_path)
+    _load_env_file()
     api_key = os.getenv("NEWS_API_KEY")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
 
@@ -204,7 +221,14 @@ async def main():
     logging.info("Chu ky hoan tat. Thoat 0.")
 
 
-if __name__ == "__main__":
+def cli() -> None:
+    """
+    Điểm vào console script `ai-trend-worker` (khai báo ở pyproject.toml).
+
+    Tách khỏi khối `if __name__ == "__main__"` để entry point của setuptools gọi
+    được: `pip install -e .` sinh ra lệnh `ai-trend-worker`, thay cho đường dẫn
+    dài `python Backend/src/ai_trend_agent/worker/main.py`.
+    """
     if "--profile" in sys.argv:
         import cProfile
         import pstats
@@ -230,3 +254,7 @@ if __name__ == "__main__":
             logging.info("=" * 60)
     else:
         asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli()

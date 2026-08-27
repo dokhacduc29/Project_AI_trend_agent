@@ -10,7 +10,7 @@ FIX OCP (Open/Closed Principle):
 """
 from abc import ABC, abstractmethod
 import logging
-from models import PipelineContext
+from ai_trend_agent.domain.models import PipelineContext
 
 
 class AgentFactory:

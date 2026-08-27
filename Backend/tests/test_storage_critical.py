@@ -11,20 +11,11 @@ Xem ADR 0003 (critical vs enrichment) và ADR 0010 (RLS + secret key).
 =====================================================================
 """
 import pytest
-import sys
-import os
 
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_agent.Infrastructure"]:
-    layer_dir = os.path.join(backend_dir, layer)
-    if layer_dir not in sys.path:
-        sys.path.insert(0, layer_dir)
 
-from models import Article, PipelineContext
-from base_agent import AgentFactory
-import supabase_storage  # noqa: F401 — side-effect: đăng ký "storage"
+from ai_trend_agent.domain.models import Article, PipelineContext
+from ai_trend_agent.application.base_agent import AgentFactory
+from ai_trend_agent.infrastructure import supabase_storage  # noqa: F401 — side-effect: đăng ký "storage"
 
 
 def _one_article() -> list[Article]:

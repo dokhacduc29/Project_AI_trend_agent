@@ -7,7 +7,7 @@ TẠI SAO?
     cleaner) → muốn tinh chỉnh wording phải sửa code logic, không version
     hóa riêng, không review/A-B test prompt độc lập được.
 
-    Nay: mỗi prompt là một file .txt trong Backend/prompts/. Agent chỉ gọi
+    Nay: mỗi prompt là một file .txt trong ai_trend_agent/prompts/. Agent chỉ gọi
     render_prompt("ten", **bien). Đây là nguyên tắc "spec/prompt là artifact
     tách biệt, version hóa" (tham chiếu github/spec-kit: tách 'what' khỏi code).
 
@@ -22,9 +22,10 @@ Iron Laws: L08 type hints + docstring, L09 no magic (đường dẫn tập trung
 import os
 from string import Template
 
-# Backend/prompts/  (file này nằm ở Backend/ai_trend_agent.Application/)
-_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROMPT_DIR: str = os.path.join(_BACKEND_DIR, "prompts")
+# prompts/ là PACKAGE DATA nằm trong ai_trend_agent/ — đi theo package khi cài,
+# nên không còn phụ thuộc vị trí thư mục Backend/ như bản cũ.
+_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROMPT_DIR: str = os.path.join(_PKG_DIR, "prompts")
 
 _cache: dict[str, Template] = {}
 

@@ -5,7 +5,7 @@
 # requirements.txt = superset dùng cho môi trường dev (thêm pytest, dashboard...).
 #
 # Quy tắc: mọi package ở đây PHẢI được import bởi code trong
-# ai_trend_agent.Domain / .Application / .Infrastructure / .WebApi
+# ai_trend_agent/domain, /application, /infrastructure, /worker
 
 httpx==0.28.1           # HTTP bất đồng bộ — scrapers, discord_agent
 python-dotenv==1.2.2    # Nạp .env — main.py

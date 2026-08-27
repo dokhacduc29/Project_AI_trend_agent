@@ -22,9 +22,9 @@ tự chia chunk khi vượt giới hạn 2000 ký tự của Discord.
 import os
 import asyncio
 import httpx
-from base_agent import BaseAgent, AgentFactory
-from models import Article, PipelineContext, Sentiment, TrendReport
-import config
+from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
+from ai_trend_agent.domain.models import Article, PipelineContext, Sentiment, TrendReport
+from ai_trend_agent.domain import config
 
 
 # Biểu tượng cảm xúc theo sentiment để nhìn nhanh xu hướng
