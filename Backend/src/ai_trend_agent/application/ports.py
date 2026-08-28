@@ -80,12 +80,16 @@ class ArticleSort(str, Enum):
 
     Kế thừa `str` để giá trị enum dùng trực tiếp được trong query string và
     trong OpenAPI schema mà không cần chuyển đổi.
+
+    CHƯA CÓ `date` / `-date` Ở v5.0. SRS bản 1.0 có liệt kê hai lựa chọn này,
+    nhưng cột `date` đang trộn ba định dạng (xem giải thích dài ở
+    `ArticleFilters`) nên sắp xếp theo nó cho ra thứ tự vô nghĩa. Thà thiếu
+    một lựa chọn còn hơn ghi trong OpenAPI rằng nó chạy rồi trả về rác.
+    Sẽ bổ sung ở B3 sau khi có cột `published_at` sạch.
     """
 
     CREATED_AT_ASC = "created_at"
     CREATED_AT_DESC = "-created_at"
-    DATE_ASC = "date"
-    DATE_DESC = "-date"
 
     @property
     def column(self) -> str:
@@ -108,6 +112,29 @@ class ArticleFilters:
 
     `frozen=True` vì đây là object mô tả một truy vấn — không ai được sửa nó
     giữa chừng sau khi đã dựng xong.
+
+    ─────────────────────────────────────────────────────────────────────────
+    QUAN TRỌNG — `date_from` / `date_to` HIỆN LỌC THEO `created_at`,
+    KHÔNG PHẢI CỘT `date`.
+
+    Lý do: khảo sát 178 bản ghi thật (2026-08-28) cho thấy cột `date` kiểu
+    `text` đang trộn ba định dạng:
+        92 bản ghi  "Wed, 15 Jul 2026"  (RFC 822 — RSS đẩy thẳng pubDate)
+        76 bản ghi  "2026-08-26"        (ISO — NewsAPI cắt publishedAt[:10])
+        10 bản ghi  "N/A"               (fallback khi parse hỏng)
+
+    Cột `text` so sánh theo thứ tự chữ cái, nên `"Wed, 15 Jul 2026"` LỚN HƠN
+    `"2026-08-01"` (vì 'W' > '2'). Hệ quả: mọi bản ghi RFC 822 luôn khớp bất
+    kỳ bộ lọc `date_from` nào — lọc và sắp xếp theo `date` đều cho kết quả sai.
+
+    Đây là lỗi dữ liệu có sẵn từ pipeline v4.0 (SRS P14), không phải do tầng
+    API sinh ra. `created_at` là `timestamptz` do Postgres tự sinh nên sạch
+    100% — dùng tạm cột này để bộ lọc CHẠY ĐÚNG, thay vì chạy sai âm thầm.
+
+    Kế hoạch dứt điểm ở B3: thêm cột `published_at date`, chuẩn hoá scraper
+    về ISO, backfill 178 bản ghi cũ, rồi chuyển bộ lọc sang `published_at`.
+    Tên tham số API giữ nguyên `date_from`/`date_to` nên hợp đồng không vỡ.
+    ─────────────────────────────────────────────────────────────────────────
     """
 
     page: int = 1
