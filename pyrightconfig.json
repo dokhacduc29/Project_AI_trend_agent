@@ -1,9 +1,5 @@
 {
     "extraPaths": [
-        "Backend",
-        "Backend/ai_trend_agent.Domain",
-        "Backend/ai_trend_agent.Application",
-        "Backend/ai_trend_agent.Infrastructure",
-        "Backend/ai_trend_agent.WebApi"
+        "Backend/src"
     ]
 }

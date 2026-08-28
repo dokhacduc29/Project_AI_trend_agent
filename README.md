@@ -83,7 +83,8 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r Backend/requirements.txt
 # tạo Backend/.env với NEWS_API_KEY, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_KEY, DISCORD_WEBHOOK_URL
-python Backend/ai_trend_agent.WebApi/main.py
+pip install -e .
+ai-trend-worker
 ```
 
 Không set `TOPIC` → nó hỏi chủ đề. Set `TOPIC` → chạy chủ đề đó rồi thoát.
@@ -109,12 +110,13 @@ kubectl apply -f k8s/03-deployment.yaml   # CronJob
 
 ```
 Backend/
-├── ai_trend_agent.Domain/          # models.py, config.py (hằng số tập trung)
-├── ai_trend_agent.Application/     # base_agent.py (Factory), decorators, log_redaction
-├── ai_trend_agent.Infrastructure/  # scrapers, cleaner, ai_agent, trend_agent,
+└── src/ai_trend_agent/
+    ├── domain/          # models.py, config.py (hằng số tập trung)
+    ├── application/     # base_agent.py (Factory), decorators, log_redaction
+    ├── infrastructure/  # scrapers, cleaner, ai_agent, trend_agent,
 │                                   #   supabase_storage, discord_agent
-├── ai_trend_agent.WebApi/main.py   # orchestrator (one-shot)
-└── ai_trend_agent.Tests/           # pytest + eval suite
+    ├── worker/main.py   # orchestrator (one-shot)
+    └── (tests: Backend/tests/)           # pytest + eval suite
 Dockerfile · k8s/ · knowledge/decisions/ (13 ADR) · docs/
 ```
 

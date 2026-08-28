@@ -16,27 +16,18 @@ PHẠM VI (deterministic, KHÔNG gọi mạng):
     3. BUDGET — vượt trần GEMINI_MAX_CALLS_PER_CYCLE → trả fallback,
        tăng bộ đếm 'blocked' (deterministic stopping).
 
-Chạy:  cd Backend && pytest ai_trend_agent.Tests/test_evals.py -v
+Chạy:  pytest Backend/tests/test_evals.py -v
 =====================================================================
 """
 import os
-import sys
 import json
 import asyncio
 
-# Nạp động các thư mục Backend vào sys.path (giống test_agents.py)
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_agent.Infrastructure"]:
-    layer_dir = os.path.join(backend_dir, layer)
-    if layer_dir not in sys.path:
-        sys.path.insert(0, layer_dir)
 
-from models import Article, Sentiment
-from ai_agent import SummarizationAgent
-import gemini_client
-import config
+from ai_trend_agent.domain.models import Article, Sentiment
+from ai_trend_agent.infrastructure.ai_agent import SummarizationAgent
+from ai_trend_agent.infrastructure import gemini_client
+from ai_trend_agent.domain import config
 
 # Ngưỡng accuracy tối thiểu cho parser sentiment (chốt regression)
 MIN_SENTIMENT_ACCURACY = 0.95

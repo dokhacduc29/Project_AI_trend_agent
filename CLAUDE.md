@@ -19,33 +19,37 @@
 
 ```
 AI_Trend_Agent/
+├── pyproject.toml           # Khai báo package (src-layout) — ADR 0014
 ├── Dockerfile               # Multi-stage build (builder + runtime, non-root)
 ├── .dockerignore
 ├── k8s/                     # K8s manifests (00-namespace → 04-service)
 ├── Backend/
-│   ├── requirements.txt
-│   ├── .env                 # NEWS_API_KEY, GEMINI_API_KEY, SUPABASE_* (KHÔNG commit)
-│   ├── ai_trend_agent.Domain/
-│   │   ├── models.py            # @dataclass Article + PipelineContext + Sentiment enum
-│   │   └── config.py            # Hằng số tập trung — Luật L09
-│   ├── prompts/                 # Prompt-as-artifact (ADR 0004) — tách khỏi code
-│   ├── ai_trend_agent.Application/
-│   │   ├── base_agent.py        # BaseAgent (ABC) + AgentFactory (decorator-based)
-│   │   ├── decorators.py        # @retry, @timer, context managers
-│   │   └── prompt_loader.py     # Nạp prompt từ prompts/ (ADR 0004)
-│   ├── ai_trend_agent.Infrastructure/
-│   │   ├── scrapers.py          # ScraperAgent — async multi-source
-│   │   ├── cleaner.py           # CleanerAgent — regex tag + dedupe + Hybrid AI (ADR 0002)
-│   │   ├── ai_agent.py          # AIAnalyzerAgent — Gemini summary + sentiment
-│   │   ├── trend_agent.py       # TrendSynthesisAgent — tổng hợp xu hướng (ADR 0001)
-│   │   ├── gemini_client.py     # Client Gemini + budget enforcement (ADR 0005)
-│   │   ├── storage.py           # StorageAgent — CSV append (legacy fallback)
-│   │   ├── supabase_storage.py  # SupabaseStorageAgent — Supabase PostgreSQL (chính)
-│   │   ├── discord_agent.py     # DiscordAgent — publisher webhook (ADR 0007)
-│   │   └── telegram_agent.py    # TelegramAgent — deprecated (thay bằng Discord)
-│   ├── ai_trend_agent.WebApi/
-│   │   └── main.py              # Orchestrator: asyncio.run(main()) → run_pipeline
-│   └── ai_trend_agent.Tests/
+│   ├── requirements.txt         # Superset: runtime + dev (pytest)
+│   ├── requirements-runtime.txt # Deps của image — nguồn sự thật cho runtime
+│   ├── .env                     # NEWS_API_KEY, GEMINI_API_KEY, SUPABASE_* (KHÔNG commit)
+│   ├── src/ai_trend_agent/      # PACKAGE THẬT — import tuyệt đối, không hack sys.path
+│   │   ├── domain/
+│   │   │   ├── models.py        # @dataclass Article + PipelineContext + Sentiment enum
+│   │   │   └── config.py        # Hằng số tập trung — Luật L09
+│   │   ├── application/
+│   │   │   ├── base_agent.py    # BaseAgent (ABC) + AgentFactory (decorator-based)
+│   │   │   ├── decorators.py    # @retry, @timer, context managers
+│   │   │   ├── log_redaction.py # Che secret trong log (ADR 0009)
+│   │   │   └── prompt_loader.py # Nạp prompt từ prompts/ (ADR 0004)
+│   │   ├── infrastructure/
+│   │   │   ├── scrapers.py          # ScraperAgent — async multi-source
+│   │   │   ├── cleaner.py           # CleanerAgent — regex tag + dedupe + Hybrid AI (ADR 0002)
+│   │   │   ├── ai_agent.py          # SummarizationAgent — Gemini summary + sentiment
+│   │   │   ├── trend_agent.py       # TrendSynthesisAgent — tổng hợp xu hướng (ADR 0001)
+│   │   │   ├── gemini_client.py     # Client Gemini + budget enforcement (ADR 0005)
+│   │   │   ├── storage.py           # StorageAgent — CSV append (legacy fallback)
+│   │   │   ├── supabase_storage.py  # SupabaseStorageAgent — Supabase PostgreSQL (chính)
+│   │   │   ├── discord_agent.py     # DiscordAgent — publisher webhook (ADR 0007)
+│   │   │   └── telegram_agent.py    # TelegramAgent — deprecated (thay bằng Discord)
+│   │   ├── prompts/             # Prompt-as-artifact (ADR 0004) — PACKAGE DATA, đi kèm khi cài
+│   │   └── worker/
+│   │       └── main.py          # Orchestrator one-shot: cli() → run_pipeline
+│   └── tests/
 │       ├── test_agents.py       # pytest unit tests
 │       ├── test_evals.py        # Eval suite — parser & robustness output AI (ADR 0006)
 │       └── evals/               # Golden datasets (vd: golden_sentiment.json)
@@ -94,17 +98,19 @@ Chi tiết đầy đủ: xem `.claude/skills/coding-rules/SKILL.md`.
 ## 7. Run & Debug
 
 ```powershell
-# Cài đặt
+# Cài đặt — LUÔN cài editable, package phải nằm trong môi trường thì import
+# tuyệt đối (ai_trend_agent.domain.models) mới hoạt động.
 python -m venv venv
 venv\Scripts\activate
-pip install -r Backend/requirements.txt
+pip install -e .
+pip install -r Backend/requirements.txt   # thêm dev deps (pytest)
 
-# Chạy
-python Backend/ai_trend_agent.WebApi/main.py
+# Chạy — console script sinh bởi pyproject.toml
+ai-trend-worker
+# hoặc: python -m ai_trend_agent.worker.main
 
-# Chạy test
-cd Backend
-pytest ai_trend_agent.Tests/ -v
+# Chạy test (từ gốc repo, không cần cd Backend)
+pytest Backend/tests -v
 
 # Dừng an toàn: Ctrl + C
 ```

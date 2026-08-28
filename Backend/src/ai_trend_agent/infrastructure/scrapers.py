@@ -12,11 +12,9 @@ import os
 import httpx
 import asyncio
 import xml.etree.ElementTree as ET
-from base_agent import BaseAgent, AgentFactory
-from models import Article, PipelineContext
-import config
-
-
+from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
+from ai_trend_agent.domain.models import Article, PipelineContext
+from ai_trend_agent.domain import config
 @AgentFactory.register("scraper")
 class ScraperAgent(BaseAgent):
     """Lính trinh sát — Cào tin từ 3 nguồn."""

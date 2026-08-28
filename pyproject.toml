@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=78.1.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-trend-agent"
+version = "5.0.0"
+description = "Pipeline ETL thu thap tin AI da nguon, lam sach + phan tich bang Gemini, luu PostgreSQL, phat hanh qua Discord"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "dokhacduc29" }]
+
+# Dependency runtime giu dong bo voi Backend/requirements-runtime.txt (ADR 0012).
+# requirements.txt = superset (them dev deps: pytest...).
+dependencies = [
+    "httpx==0.28.1",
+    "python-dotenv==1.2.2",
+    "google-genai==2.7.0",
+    "supabase==2.31.0",
+    "msgpack>=1.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+]
+
+# Entry point: `ai-trend-worker` chay mot chu ky pipeline roi thoat (mo hinh
+# one-shot cua CronJob - ADR 0011). Thay cho `python .../main.py` duong dan dai.
+[project.scripts]
+ai-trend-worker = "ai_trend_agent.worker.main:cli"
+
+[project.urls]
+Repository = "https://github.com/dokhacduc29/Project_AI_trend_agent"
+
+# --- Package discovery: src-layout ---
+# Source that su nam o Backend/src/, KHONG phai goc repo, nen phai khai bao
+# package-dir. Doi lai: ten package hop le (ai_trend_agent.domain), import
+# tuyet doi, va `pip install -e .` chay duoc -> khong con hack sys.path.
+[tool.setuptools]
+package-dir = { "" = "Backend/src" }
+
+[tool.setuptools.packages.find]
+where = ["Backend/src"]
+
+# prompts/*.txt la PACKAGE DATA (ADR 0004 - prompt-as-artifact): chung phai di
+# theo package khi cai dat, neu khong prompt_loader se khong tim thay file.
+[tool.setuptools.package-data]
+ai_trend_agent = ["prompts/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["Backend/tests"]
+asyncio_mode = "strict"

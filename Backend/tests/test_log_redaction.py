@@ -8,18 +8,9 @@ Test này chốt lại hành vi che, và đảm bảo log chẩn đoán KHÔNG b
 """
 import io
 import logging
-import sys
-import os
 
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-for layer in ["ai_trend_agent.Domain", "ai_trend_agent.Application", "ai_trend_agent.Infrastructure"]:
-    layer_dir = os.path.join(backend_dir, layer)
-    if layer_dir not in sys.path:
-        sys.path.insert(0, layer_dir)
 
-from log_redaction import redact, install_secret_redaction, REDACTION_MARK
+from ai_trend_agent.application.log_redaction import redact, install_secret_redaction, REDACTION_MARK
 
 
 # Mô phỏng ĐÚNG hình dạng dòng log mà httpx sinh ra khi gọi webhook Discord.

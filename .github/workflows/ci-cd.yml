@@ -41,12 +41,16 @@ jobs:
           cache: pip
           cache-dependency-path: Backend/requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r Backend/requirements.txt
+      # Cai package o che do editable: test import bang duong dan tuyet doi
+      # (ai_trend_agent.domain.models) nen package PHAI duoc cai, khong con
+      # dua vao hack sys.path nhu ban cu.
+      - name: Install package + dev dependencies
+        run: |
+          pip install -e .
+          pip install -r Backend/requirements.txt
 
       - name: Run pytest
-        working-directory: Backend
-        run: python -m pytest ai_trend_agent.Tests/ -v
+        run: python -m pytest Backend/tests -v
 
   # ------------------------------------------------------------------
   # JOB 2 — BUILD, SMOKE, SCAN, PUSH
@@ -87,23 +91,43 @@ jobs:
       # that. Bat thieu dependency hoac lech version NGAY o day, khong cho toi runtime.
       - name: Smoke test — import closure
         run: |
-          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" \
-            -c "import scrapers, cleaner, ai_agent, trend_agent, supabase_storage, discord_agent, gemini_client, config; print('import closure OK')"
+          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" -c "
+          from ai_trend_agent.domain import config, models
+          from ai_trend_agent.application import base_agent, decorators, log_redaction, prompt_loader
+          from ai_trend_agent.infrastructure import scrapers, cleaner, ai_agent, trend_agent
+          from ai_trend_agent.infrastructure import gemini_client, storage, supabase_storage, discord_agent
+          from ai_trend_agent.worker import main
+          print('import closure OK')
+          "
 
-      # Smoke 2 — Config-guard: chay ENTRYPOINT that voi NEWS_API_KEY rong.
-      # main.py phai thoat 78 (EXIT_CONFIG_ERROR) TRUOC khi cham mang.
-      # Chung minh: image build dung, python khoi dong, dotenv + config-guard wiring OK.
+      # Smoke 2 — Config-guard: chay CMD MAC DINH (console script ai-trend-worker)
+      # voi NEWS_API_KEY rong. Worker phai thoat 78 (EXIT_CONFIG_ERROR) TRUOC khi
+      # cham mang. Chung minh: image build dung, console script tu pyproject duoc
+      # cai dung cho, dotenv + config-guard wiring OK.
       - name: Smoke test — config-guard exits 78
         run: |
           set +e
           docker run --rm -e NEWS_API_KEY= -e TOPIC=AI \
-            --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" ai_trend_agent.WebApi/main.py
+            "${IMAGE}:ci-${GITHUB_SHA}"
           code=$?
           echo "entrypoint exit code = ${code}"
           if [ "${code}" -ne 78 ]; then
             echo "::error::Expected exit 78 (EXIT_CONFIG_ERROR), got ${code}"
             exit 1
           fi
+
+      # Smoke 3 — Package data: prompts/*.txt phai duoc cai KEM package (ADR 0004).
+      # Neu pyproject quen khai bao package-data, prompt_loader se ImportError luc
+      # runtime chu khong phai luc build -> bat ngay tai day.
+      - name: Smoke test — prompt package data
+        run: |
+          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" -c "
+          from ai_trend_agent.application.prompt_loader import load_prompt, PROMPT_DIR
+          print('PROMPT_DIR =', PROMPT_DIR)
+          for n in ('analyzer', 'cleaner', 'trend'):
+              assert load_prompt(n).template.strip(), f'{n}.txt rong'
+          print('prompt package-data OK')
+          "
 
       # Trivy — chi FAIL khi CVE co ban va (ignore-unfixed) o muc HIGH/CRITICAL.
       # Khong bi chan boi CVE base-image chua co fix; loi bao la loi ACTIONABLE.

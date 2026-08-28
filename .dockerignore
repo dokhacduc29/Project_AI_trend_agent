@@ -4,6 +4,9 @@
 .vscode
 .claude
 *.md
+# README.md la BAT BUOC: pyproject.toml khai bao readme="README.md",
+# thieu no thi `pip install .` trong builder se that bai.
+!README.md
 
 # ── Python artifacts ───────────────────────────
 __pycache__/
@@ -22,7 +25,7 @@ venv/
 env/
 
 # ── Test & Dev files ───────────────────────────
-Backend/ai_trend_agent.Tests/
+Backend/tests/
 Backend/quick_test.py
 Backend/test_supabase_connection.py
 

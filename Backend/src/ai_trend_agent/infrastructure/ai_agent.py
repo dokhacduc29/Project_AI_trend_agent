@@ -15,12 +15,12 @@ import asyncio
 import hashlib
 from google import genai
 
-from base_agent import BaseAgent, AgentFactory
-from models import PipelineContext, Sentiment, Article
-from gemini_client import generate_with_retry
-from prompt_loader import render_prompt
-import config
-from decorators import ai_timer, ai_logger
+from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
+from ai_trend_agent.domain.models import PipelineContext, Sentiment, Article
+from ai_trend_agent.infrastructure.gemini_client import generate_with_retry
+from ai_trend_agent.application.prompt_loader import render_prompt
+from ai_trend_agent.domain import config
+from ai_trend_agent.application.decorators import ai_timer, ai_logger
 
 
 @AgentFactory.register("analyzer")

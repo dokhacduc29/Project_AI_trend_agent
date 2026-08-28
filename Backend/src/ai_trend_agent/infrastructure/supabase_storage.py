@@ -11,8 +11,8 @@ Thay thế StorageAgent (CSV) bằng Supabase PostgreSQL.
 import os
 import asyncio
 from supabase import create_client, Client
-from base_agent import BaseAgent, AgentFactory
-from models import Article, PipelineContext
+from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
+from ai_trend_agent.domain.models import Article, PipelineContext
 
 
 @AgentFactory.register("storage")

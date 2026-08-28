@@ -8,16 +8,24 @@
 # ──────────────────────────────────────────────
 FROM python:3.13-slim AS builder
 
-WORKDIR /install
+WORKDIR /build
 
-# Chỉ copy requirements trước để tận dụng Docker layer cache
-# requirements-runtime.txt = nguồn sự thật DUY NHẤT cho deps của image.
-# Dev-only libs (pytest, dashboard) nằm ở requirements.txt và không vào đây.
+# Cai DEPENDENCY truoc, tach khoi source: doi code khong lam mat cache layer nay.
+# requirements-runtime.txt = nguon su that DUY NHAT cho deps cua image.
+# Dev-only libs (pytest, dashboard) nam o requirements.txt va khong vao day.
 COPY Backend/requirements-runtime.txt .
 
-# --no-cache-dir: không lưu pip cache vào image
-# --prefix: cài vào /install thay vì system site-packages
+# --no-cache-dir: khong luu pip cache vao image
+# --prefix: cai vao /install thay vi system site-packages
 RUN pip install --no-cache-dir --prefix=/install -r requirements-runtime.txt
+
+# Cai CHINH PACKAGE (src-layout, khai bao o pyproject.toml). --no-deps vi deps
+# da cai o layer tren. Sau buoc nay `ai_trend_agent` nam trong site-packages va
+# console script `ai-trend-worker` co trong /install/bin -> runtime khong con
+# can PYTHONPATH tro vao tung thu muc layer nhu ban cu.
+COPY pyproject.toml README.md ./
+COPY Backend/src ./Backend/src
+RUN pip install --no-cache-dir --prefix=/install --no-deps .
 
 
 # ──────────────────────────────────────────────
@@ -33,7 +41,7 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # Metadata
 LABEL maintainer="dokhacduc29" \
-      version="4.0.0" \
+      version="5.0.0" \
       description="AI Trend Agent - automated AI news pipeline"
 
 # Tạo non-root user để chạy app (security best practice)
@@ -62,8 +70,8 @@ RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1" \
     && ! python -c "import pip" 2>/dev/null \
     && echo "pip removed from runtime image"
 
-# Copy source code (chỉ cần Backend/)
-COPY --chown=appuser:appgroup Backend/ .
+# KHONG con COPY source vao /app: package da duoc CAI vao site-packages o
+# builder stage. /app chi con la thu muc lam viec cho data runtime.
 
 # Tạo thư mục data với quyền ghi cho appuser (AI cache + CSV fallback)
 RUN mkdir -p /app/data && chown appuser:appgroup /app/data
@@ -72,9 +80,11 @@ RUN mkdir -p /app/data && chown appuser:appgroup /app/data
 # Environment Variables (non-secret defaults)
 # Secrets (API keys) được inject qua K8s Secret hoặc --env-file
 # ──────────────────────────────────────────────
+# Khong con PYTHONPATH: package duoc CAI chuan vao site-packages nen Python tu
+# tim thay. Ban cu phai tro PYTHONPATH vao tung thu muc layer vi ten thu muc co
+# dau cham (ai_trend_agent.Domain) khong phai package Python hop le.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app:/app/ai_trend_agent.Domain:/app/ai_trend_agent.Application:/app/ai_trend_agent.Infrastructure \
     TOPIC="Artificial Intelligence"
 
 # Chạy với non-root user
@@ -86,5 +96,5 @@ USER appuser
 # treo, nên là tín hiệu giả. Với job ngắn, "sống/chết" do exit code quyết định,
 # và K8s CronJob dùng activeDeadlineSeconds + backoffLimit thay cho probe.
 
-# Entry point: chạy app
-CMD ["python", "ai_trend_agent.WebApi/main.py"]
+# Entry point: console script sinh boi pyproject.toml [project.scripts].
+CMD ["ai-trend-worker"]
