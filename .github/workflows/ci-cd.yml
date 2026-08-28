@@ -91,8 +91,14 @@ jobs:
       # that. Bat thieu dependency hoac lech version NGAY o day, khong cho toi runtime.
       - name: Smoke test — import closure
         run: |
-          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" \
-            -c "import scrapers, cleaner, ai_agent, trend_agent, supabase_storage, discord_agent, gemini_client, config; print('import closure OK')"
+          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" -c "
+          from ai_trend_agent.domain import config, models
+          from ai_trend_agent.application import base_agent, decorators, log_redaction, prompt_loader
+          from ai_trend_agent.infrastructure import scrapers, cleaner, ai_agent, trend_agent
+          from ai_trend_agent.infrastructure import gemini_client, storage, supabase_storage, discord_agent
+          from ai_trend_agent.worker import main
+          print('import closure OK')
+          "
 
       # Smoke 2 — Config-guard: chay CMD MAC DINH (console script ai-trend-worker)
       # voi NEWS_API_KEY rong. Worker phai thoat 78 (EXIT_CONFIG_ERROR) TRUOC khi
@@ -115,7 +121,13 @@ jobs:
       # runtime chu khong phai luc build -> bat ngay tai day.
       - name: Smoke test — prompt package data
         run: |
-          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}"             -c "from ai_trend_agent.application.prompt_loader import load_prompt; [load_prompt(n) for n in ('analyzer','cleaner','trend')]; print('prompt package-data OK')"
+          docker run --rm --entrypoint python "${IMAGE}:ci-${GITHUB_SHA}" -c "
+          from ai_trend_agent.application.prompt_loader import load_prompt, PROMPT_DIR
+          print('PROMPT_DIR =', PROMPT_DIR)
+          for n in ('analyzer', 'cleaner', 'trend'):
+              assert load_prompt(n).template.strip(), f'{n}.txt rong'
+          print('prompt package-data OK')
+          "
 
       # Trivy — chi FAIL khi CVE co ban va (ignore-unfixed) o muc HIGH/CRITICAL.
       # Khong bi chan boi CVE base-image chua co fix; loi bao la loi ACTIONABLE.
