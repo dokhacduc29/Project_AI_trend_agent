@@ -100,13 +100,15 @@ Chi tiết đầy đủ: xem `.claude/skills/coding-rules/SKILL.md`.
 ```powershell
 # Cài đặt — LUÔN cài editable, package phải nằm trong môi trường thì import
 # tuyệt đối (ai_trend_agent.domain.models) mới hoạt động.
-python -m venv venv
-venv\Scripts\activate
+# Tên venv là `.venv` (KHÔNG phải `venv`) — xem cảnh báo bên dưới.
+python -m venv .venv
+.venv\Scripts\activate
 pip install -e .
 pip install -r Backend/requirements.txt   # thêm dev deps (pytest)
 
 # Chạy — console script sinh bởi pyproject.toml
-ai-trend-worker
+ai-trend-worker          # worker: 1 chu kỳ pipeline rồi thoát (CronJob)
+ai-trend-api             # API: ASGI server, mặc định 0.0.0.0:8080 → /docs
 # hoặc: python -m ai_trend_agent.worker.main
 
 # Chạy test (từ gốc repo, không cần cd Backend)
@@ -114,6 +116,18 @@ pytest Backend/tests -v
 
 # Dừng an toàn: Ctrl + C
 ```
+
+> **Bẫy hai môi trường — đã mắc một lần, đừng lặp.**
+> `pip install -e .` chỉ cài vào **một** interpreter. Nếu lỡ chạy nó bằng Python
+> hệ thống rồi sau đó lại làm việc trong `.venv` (hoặc ngược lại), bạn sẽ có hai
+> môi trường cùng trỏ vào **cùng một source** nhưng **khác dependency** — dẫn tới
+> `ModuleNotFoundError` cho một thư viện rõ ràng đã cài, trong khi code không hề sai.
+>
+> Khi gặp lỗi import khó hiểu, kiểm tra interpreter TRƯỚC khi nghi ngờ code:
+> ```powershell
+> python -c "import sys; print(sys.executable)"
+> ```
+> Kết quả phải trỏ vào `.venv\Scripts\python.exe` của project.
 
 ## 8. Roadmap nhanh
 
