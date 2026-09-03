@@ -16,6 +16,7 @@ VÌ SAO KHÔNG TRẢ THẲNG `Article` (dataclass domain) RA JSON?
 Iron Laws: L05 (pagination), L08 (type hints + docstring).
 =====================================================================
 """
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Generic, TypeVar
@@ -23,7 +24,7 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai_trend_agent.application.ports import Page
-from ai_trend_agent.domain.models import Article, Sentiment
+from ai_trend_agent.domain.models import Article, PipelineRun, Sentiment
 
 T = TypeVar("T")
 
@@ -175,6 +176,103 @@ class ArticleOut(BaseModel):
             # đó là im lặng của hệ thống, không phải kết luận của AI.
             summary=article.summary if analyzed else None,
             sentiment=_SENTIMENT_MAP.get(article.sentiment) if analyzed else None,
+        )
+
+
+class TrendItemOut(BaseModel):
+    """
+    Một xu hướng trong báo cáo (FR-03).
+
+    ─────────────────────────────────────────────────────────────────────────
+    `article_count` CÓ THỂ null — và đây là giới hạn thật, không phải thiếu sót.
+
+    Domain lưu mỗi xu hướng là một CHUỖI THUẦN, ví dụ:
+        "Chính phủ áp đặt quy định về AI trong trường học. (4 bài)"
+
+    Prompt chỉ *gợi ý* mô hình ghi số bài trong ngoặc — đó là chỉ dẫn văn phong
+    cho LLM, không phải trường có cấu trúc. Mô hình có thể bỏ qua, đổi cách
+    viết, hoặc trả về tiếng Anh.
+
+    Nên ở đây bóc số theo kiểu best-effort; không bóc được thì trả null thay vì
+    đoán một con số. Cùng nguyên tắc với P15: thà nói "không biết" còn hơn bịa.
+
+    Cách sửa dứt điểm là bắt prompt trả JSON có cấu trúc `{title, count}`.
+    SRS mục 2.3 xếp việc sửa prompt vào NGOÀI PHẠM VI v5.0, nên để lại cho sau.
+    ─────────────────────────────────────────────────────────────────────────
+    """
+
+    title: str = Field(description="Nội dung xu hướng, đã bỏ phần đếm bài ở cuối")
+    article_count: int | None = Field(
+        default=None, description="Số bài liên quan, null nếu không bóc được từ văn bản"
+    )
+
+
+# "... (4 bài)" hoặc "... (4 articles)" ở CUỐI chuỗi. Neo `$` để không nuốt
+# nhầm một con số nào đó nằm giữa câu.
+_TREND_COUNT_RE = re.compile(r"\s*\((\d+)\s*(?:bài|bai|articles?)\)\s*$", re.IGNORECASE)
+
+
+class TrendReportOut(BaseModel):
+    """Báo cáo xu hướng của chu kỳ chạy thành công gần nhất (FR-03)."""
+
+    run_id: str = Field(description="Lần chạy đã sinh ra báo cáo này")
+    topic: str = Field(description="Chủ đề của chu kỳ")
+    generated_at: datetime | None = Field(default=None, description="Thời điểm chu kỳ kết thúc")
+    overall_sentiment: SentimentOut = Field(description="Tâm lý chung của thị trường")
+    insight: str = Field(description="Nhận định tổng quan 1-2 câu")
+    trends: list[TrendItemOut] = Field(description="Các xu hướng nổi bật")
+    article_count: int | None = Field(
+        default=None, description="Số bài đã dùng để rút ra báo cáo (số bài chu kỳ cào về)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "run_id": "6054fbc0-b673-4595-b430-ee270b5d26f2",
+                    "topic": "Artificial Intelligence",
+                    "generated_at": "2026-09-03T06:24:44Z",
+                    "overall_sentiment": "neutral",
+                    "insight": "Thị trường AI phát triển nhanh nhưng chịu giám sát chặt về an toàn và quy định.",
+                    "trends": [
+                        {"title": "Chính phủ áp đặt quy định về AI trong trường học.", "article_count": 4},
+                        {"title": "AI tích hợp sâu vào các ngành công nghiệp.", "article_count": 3},
+                    ],
+                    "article_count": 18,
+                }
+            ]
+        }
+    )
+
+    @classmethod
+    def from_run(cls, run: PipelineRun) -> "TrendReportOut":
+        """
+        Dựng response từ một `PipelineRun` đã có `trend_report`.
+
+        [AC-03.3] Sắp xếp xu hướng giảm dần theo `article_count`. Xu hướng không
+        bóc được số xếp cuối — không có căn cứ nào để đặt chúng lên trên.
+        """
+        report = run.trend_report
+        assert report is not None, "chỉ gọi khi run đã có trend_report"
+
+        items: list[TrendItemOut] = []
+        for raw in report.trends:
+            text = raw.strip()
+            m = _TREND_COUNT_RE.search(text)
+            count = int(m.group(1)) if m else None
+            title = _TREND_COUNT_RE.sub("", text).strip() if m else text
+            items.append(TrendItemOut(title=title, article_count=count))
+
+        items.sort(key=lambda i: (i.article_count is not None, i.article_count or 0), reverse=True)
+
+        return cls(
+            run_id=run.run_id,
+            topic=run.topic,
+            generated_at=run.finished_at,
+            overall_sentiment=_SENTIMENT_MAP[report.overall_sentiment],
+            insight=report.insight,
+            trends=items,
+            article_count=run.articles_scraped,
         )
 
 

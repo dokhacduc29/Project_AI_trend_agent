@@ -27,7 +27,7 @@ from fastapi import FastAPI
 
 from ai_trend_agent import __version__
 from ai_trend_agent.api.errors import install_error_handlers
-from ai_trend_agent.api.routers import articles, health
+from ai_trend_agent.api.routers import articles, health, trends
 
 # Mô tả hiển thị ngay đầu trang /docs — coi như trang bìa của API.
 _DESCRIPTION = """
@@ -42,6 +42,7 @@ Xem thêm: [repo trên GitHub](https://github.com/dokhacduc29/Project_AI_trend_a
 # Nhóm endpoint trong Swagger cho dễ đọc, thay vì một danh sách phẳng.
 _TAGS_METADATA = [
     {"name": "articles", "description": "Truy vấn bài viết đã thu thập — phân trang và lọc."},
+    {"name": "trends", "description": "Báo cáo xu hướng do AI tổng hợp mỗi chu kỳ."},
     {"name": "health", "description": "Probe hạ tầng cho Kubernetes (liveness / readiness)."},
 ]
 
@@ -63,6 +64,7 @@ install_error_handlers(app)
 
 # Tài nguyên nghiệp vụ nằm dưới /api/v1 (prefix khai trong chính router).
 app.include_router(articles.router)
+app.include_router(trends.router)
 
 # Health nằm ở GỐC (không có /api/v1) — xem giải thích ở docstring đầu file.
 app.include_router(health.router)

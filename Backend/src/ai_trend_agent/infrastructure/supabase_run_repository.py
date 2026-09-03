@@ -35,9 +35,19 @@ from typing import Any
 
 from supabase import Client, create_client
 
-from ai_trend_agent.domain.models import RunStatus, RunTrigger, TrendReport
+from ai_trend_agent.domain.models import (
+    PipelineRun,
+    RunStatus,
+    RunTrigger,
+    Sentiment,
+    TrendReport,
+)
 
 _TABLE = "pipeline_runs"
+
+# Bang tra nguoc gia tri tieng Viet -> enum domain, dung tu enum de hai chieu
+# khong bao gio lech nhau.
+_SENTIMENT_BY_VALUE: dict[str, Sentiment] = {s.value: s for s in Sentiment}
 _logger = logging.getLogger("ai_trend_agent.infrastructure.run_repository")
 
 
@@ -55,6 +65,60 @@ def _trend_to_json(report: TrendReport | None) -> dict[str, Any] | None:
     # `overall_sentiment` là Enum, `asdict` giữ nguyên object nên phải tự đổi.
     data["overall_sentiment"] = report.overall_sentiment.value
     return data
+
+
+def _trend_from_json(raw: Any) -> TrendReport | None:
+    """
+    Cột `jsonb` → `TrendReport`.
+
+    Migration 002 đã ghi rõ đánh đổi của `jsonb`: DB KHÔNG kiểm tra được hình
+    dạng, nên tầng ứng dụng phải tự validate khi đọc lên. Dữ liệu có thể do một
+    phiên bản app cũ ghi, hoặc do ai đó sửa tay trong SQL Editor.
+
+    Hỏng thì trả None chứ không raise: `/trends/latest` trả 404 "chưa có báo
+    cáo" vẫn tốt hơn là trả 500 vì một dòng dữ liệu méo.
+    """
+    if not isinstance(raw, dict):
+        return None
+    try:
+        sentiment = _SENTIMENT_BY_VALUE.get(raw.get("overall_sentiment", ""), Sentiment.NEUTRAL)
+        trends = [str(t) for t in raw.get("trends", []) if str(t).strip()]
+        return TrendReport(
+            trends=trends,
+            overall_sentiment=sentiment,
+            insight=str(raw.get("insight") or ""),
+            generated=bool(raw.get("generated")),
+        )
+    except (TypeError, ValueError, AttributeError):
+        _logger.warning("Ban ghi trend_report co hinh dang la, bo qua", exc_info=True)
+        return None
+
+
+def _parse_dt(raw: str | None) -> datetime | None:
+    """Chuỗi ISO của Postgres → datetime. Hỏng thì None, không làm sập truy vấn."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def _row_to_run(row: dict[str, Any]) -> PipelineRun:
+    """Một dòng `pipeline_runs` → entity domain."""
+    return PipelineRun(
+        run_id=str(row.get("run_id") or ""),
+        topic=row.get("topic") or "",
+        status=RunStatus(row["status"]),
+        trigger=RunTrigger(row["trigger"]),
+        started_at=_parse_dt(row.get("started_at")),
+        finished_at=_parse_dt(row.get("finished_at")),
+        articles_scraped=row.get("articles_scraped"),
+        articles_stored=row.get("articles_stored"),
+        trend_report=_trend_from_json(row.get("trend_report")),
+        error=row.get("error"),
+        created_at=_parse_dt(row.get("created_at")),
+    )
 
 
 class SupabaseRunRepository:
@@ -151,3 +215,36 @@ class SupabaseRunRepository:
             await asyncio.to_thread(self._update_sync, run_id, patch)
         except Exception:
             _logger.error("Khong ghi duoc ket qua run (run_id=%s)", run_id, exc_info=True)
+
+    # ── Đường ĐỌC ─────────────────────────────────────────────────────────
+
+    def _latest_with_trend_sync(self) -> dict[str, Any] | None:
+        """
+        Run `succeeded` gần nhất CÓ báo cáo xu hướng.
+
+        Hai điều kiện lọc đều cần thiết:
+          - `status = succeeded`  : không lấy chu kỳ đang chạy dở (AC-03.1)
+          - `trend_report != null`: bỏ qua chu kỳ hoàn tất nhưng
+            TrendSynthesisAgent (enrichment) lỗi nên không sinh được báo cáo.
+            Lấy nhầm run đó thì API trả rỗng dù có báo cáo cũ vẫn dùng được.
+
+        Sắp xếp theo `finished_at` chứ không `created_at`: quan tâm chu kỳ nào
+        KẾT THÚC gần nhất, không phải chu kỳ nào được tạo gần nhất.
+        """
+        res = (
+            self._get_client()
+            .table(_TABLE)
+            .select("*")
+            .eq("status", RunStatus.SUCCEEDED.value)
+            .not_.is_("trend_report", "null")
+            .order("finished_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+
+    async def latest_with_trend(self) -> PipelineRun | None:
+        """Run `succeeded` gần nhất có báo cáo xu hướng (FR-03). None nếu chưa có."""
+        row = await asyncio.to_thread(self._latest_with_trend_sync)
+        return _row_to_run(row) if row else None

@@ -32,8 +32,9 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from ai_trend_agent.application.ports import ArticleRepository
+from ai_trend_agent.application.ports import ArticleRepository, RunRepository
 from ai_trend_agent.infrastructure.supabase_repository import SupabaseArticleRepository
+from ai_trend_agent.infrastructure.supabase_run_repository import SupabaseRunRepository
 
 
 @lru_cache(maxsize=1)
@@ -63,3 +64,17 @@ def get_article_repository() -> ArticleRepository:
 # báo một lần dùng nhiều nơi, và không đặt giá trị mặc định có thể gọi được
 # vào tham số hàm — thứ khiến hàm khó test khi gọi trực tiếp ngoài FastAPI.
 ArticleRepositoryDep = Annotated[ArticleRepository, Depends(get_article_repository)]
+
+
+@lru_cache(maxsize=1)
+def _run_repository_singleton() -> SupabaseRunRepository:
+    """Repository nhật ký chạy, singleton cùng lý do với `_article_repository_singleton`."""
+    return SupabaseRunRepository()
+
+
+def get_run_repository() -> RunRepository:
+    """Provider cho router. Kiểu trả về là PORT, không phải lớp cụ thể."""
+    return _run_repository_singleton()
+
+
+RunRepositoryDep = Annotated[RunRepository, Depends(get_run_repository)]

@@ -35,7 +35,14 @@ from datetime import date
 from enum import Enum
 from typing import Generic, Protocol, TypeVar
 
-from ai_trend_agent.domain.models import Article, RunStatus, RunTrigger, Sentiment, TrendReport
+from ai_trend_agent.domain.models import (
+    Article,
+    PipelineRun,
+    RunStatus,
+    RunTrigger,
+    Sentiment,
+    TrendReport,
+)
 
 T = TypeVar("T")
 
@@ -188,10 +195,12 @@ class RunRepository(Protocol):
     """
     Hợp đồng ghi lại lịch sử các lần chạy pipeline (FR-04 → FR-06).
 
-    Ba method ở đây là ĐƯỜNG GHI, đủ cho worker ghi nhật ký chu kỳ của mình.
-    Các method ĐỌC (`get`, `list_paginated`, `latest_with_trend`, `has_active`)
-    sẽ gia nhập khi làm router `/runs` và `/trends/latest` — giữ nguyên tắc
-    không khai báo method chưa ai hiện thực.
+    Ba method đầu là ĐƯỜNG GHI, đủ cho worker ghi nhật ký chu kỳ của mình.
+    `latest_with_trend` là method ĐỌC đầu tiên, thêm ở bước 8 để phục vụ FR-03.
+
+    Các method đọc còn lại (`get`, `list_paginated`, `has_active`) sẽ gia nhập
+    ở bước 9 khi làm router `/runs` — giữ nguyên tắc không khai báo method chưa
+    ai hiện thực.
 
     LƯU Ý VỀ TÍNH CHỊU LỖI: mọi lời gọi ở đây là ENRICHMENT theo phân loại của
     ADR 0003. Ghi nhật ký hỏng thì log rồi đi tiếp — tuyệt đối không được làm
@@ -217,4 +226,20 @@ class RunRepository(Protocol):
         error: str | None = None,
     ) -> None:
         """Kết thúc run: ghi trạng thái cuối, số liệu, báo cáo xu hướng, lỗi nếu có."""
+        ...
+
+    async def latest_with_trend(self) -> PipelineRun | None:
+        """
+        Run `succeeded` gần nhất CÓ báo cáo xu hướng — nguồn của FR-03.
+
+        [AC-03.1] Chỉ xét run đã `succeeded`, không lấy run đang chạy dở: báo
+        cáo của một chu kỳ chưa xong là dữ liệu chưa chốt.
+
+        Đồng thời bỏ qua run `succeeded` mà `trend_report` NULL — chuyện xảy ra
+        thật khi `TrendSynthesisAgent` (enrichment) lỗi nhưng chu kỳ vẫn hoàn
+        tất. Lấy nhầm run đó thì `/trends/latest` trả về rỗng dù có báo cáo cũ
+        hoàn toàn dùng được.
+
+        `None` khi chưa từng có chu kỳ nào sinh được xu hướng (AC-03.2).
+        """
         ...
