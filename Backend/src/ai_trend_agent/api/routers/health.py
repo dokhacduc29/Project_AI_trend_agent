@@ -18,10 +18,17 @@ HAI ENDPOINT NÀY KHÁC NHAU VỀ BẢN CHẤT, KHÔNG PHẢI TRÙNG LẶP:
 Iron Laws: L03 async, L08 type hints + docstring.
 =====================================================================
 """
+import logging
+import time
+
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ai_trend_agent import __version__
+from ai_trend_agent.api.dependencies import ArticleRepositoryDep
+
+_logger = logging.getLogger("ai_trend_agent.api.health")
 
 router = APIRouter(tags=["health"])
 
@@ -57,3 +64,100 @@ async def liveness() -> LivenessResponse:
     nhanh (NFR: dưới 50ms) vì probe gọi lặp lại liên tục.
     """
     return LivenessResponse(status="ok", version=__version__)
+
+
+class CheckResult(BaseModel):
+    """Kết quả kiểm tra MỘT dependency."""
+
+    status: str = Field(description="'ok' hoặc 'error'")
+    latency_ms: int | None = Field(default=None, description="Thời gian phản hồi, chỉ có khi ok")
+    detail: str | None = Field(default=None, description="Mô tả lỗi, chỉ có khi error")
+
+
+class ReadinessResponse(BaseModel):
+    """Kết quả readiness — có sẵn sàng nhận traffic không."""
+
+    status: str = Field(description="'ready' hoặc 'not_ready'")
+    checks: dict[str, CheckResult] = Field(description="Kết quả từng dependency")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"status": "ready", "checks": {"database": {"status": "ok", "latency_ms": 42}}},
+                {
+                    "status": "not_ready",
+                    "checks": {
+                        "database": {"status": "error", "detail": "khong ket noi duoc kho du lieu"}
+                    },
+                },
+            ]
+        }
+    }
+
+
+@router.get(
+    "/health/ready",
+    response_model=ReadinessResponse,
+    # Bỏ field null khỏi response: khi ok thì không có `detail`, khi lỗi thì
+    # không có `latency_ms`. Người vận hành đọc lúc sự cố, càng ít nhiễu càng tốt.
+    response_model_exclude_none=True,
+    summary="Readiness probe",
+    description=(
+        "Trả 200 khi mọi dependency phản hồi được, **503** khi không. Kubernetes "
+        "dùng kết quả này để quyết định có đẩy traffic vào pod hay không."
+    ),
+    responses={503: {"model": ReadinessResponse, "description": "Chưa sẵn sàng nhận traffic"}},
+)
+async def readiness(repo: ArticleRepositoryDep) -> ReadinessResponse | JSONResponse:
+    """
+    Readiness probe cho Kubernetes (FR-07).
+
+    KHÁC LIVENESS Ở CHỖ NÀO: ở đây MỚI được chạm dependency ngoài. DB chết thì
+    trả 503 → K8s ngừng đẩy traffic vào pod nhưng KHÔNG giết pod. DB hồi thì pod
+    tự nhận traffic lại, không cần restart.
+
+    [AC-07.3] Không yêu cầu xác thực — probe của K8s không mang API key.
+
+    ─────────────────────────────────────────────────────────────────────────
+    VÌ SAO ENDPOINT NÀY KHÔNG DÙNG RFC 7807 DÙ FR-09 BẮT MỌI LỖI PHẢI THEO:
+
+    Đây là ngoại lệ CÓ CHỦ Ý. Người tiêu thụ `/health/ready` là Kubernetes,
+    và K8s chỉ đọc MÃ TRẠNG THÁI — nó không parse body. Phần body chỉ dành cho
+    người vận hành đọc khi debug, nên hình dạng "từng dependency ra sao" hữu
+    ích hơn hẳn hình dạng Problem Details.
+
+    RFC 7807 sinh ra cho lỗi mà CLIENT của API phải xử lý; 503 ở đây không
+    phải lỗi của người gọi mà là trạng thái của chính service.
+    ─────────────────────────────────────────────────────────────────────────
+
+    ⚠️ LƯU Ý KHI VIẾT MANIFEST K8S — ĐO ĐƯỢC, KHÔNG PHẢI PHỎNG ĐOÁN:
+        Lần gọi ĐẦU TIÊN mất ~850ms vì repository dựng client lười: khởi tạo
+        supabase-py + bắt tay TLS. Các lần sau ổn định ~105ms.
+
+        `readinessProbe` của K8s mặc định `timeoutSeconds: 1`, nên probe đầu
+        tiên ngay sau khi pod khởi động RẤT DỄ trượt. Manifest phải đặt
+        `timeoutSeconds` rộng hơn (3s) và có `initialDelaySeconds`, nếu không
+        pod sẽ bị đánh dấu chưa sẵn sàng dù hoàn toàn khỏe.
+    """
+    started = time.perf_counter()
+    try:
+        await repo.ping()
+    except Exception as exc:
+        # [Bảo mật] Không đưa `str(exc)` ra ngoài: lỗi kết nối Supabase chứa
+        # nguyên hostname của project. Chi tiết vào log (đã che secret theo
+        # ADR 0009), response chỉ nói chung chung — cùng nguyên tắc với
+        # handler 500 ở api/errors.py.
+        _logger.error("Readiness that bai: khong ket noi duoc kho du lieu", exc_info=True)
+        body = ReadinessResponse(
+            status="not_ready",
+            checks={"database": CheckResult(status="error", detail="khong ket noi duoc kho du lieu")},
+        )
+        # `exclude_none` phải đặt tay ở đây: nhánh này trả JSONResponse trực
+        # tiếp nên KHÔNG đi qua `response_model_exclude_none` của decorator.
+        return JSONResponse(status_code=503, content=body.model_dump(exclude_none=True))
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    return ReadinessResponse(
+        status="ready",
+        checks={"database": CheckResult(status="ok", latency_ms=latency_ms)},
+    )
