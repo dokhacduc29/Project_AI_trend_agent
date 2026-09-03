@@ -28,6 +28,11 @@ class SupabaseStorageAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__("SupabaseStorageAgent")
         self._client: Client | None = None
+        # [B3a] Số bài THỰC SỰ chèn mới ở lần chạy gần nhất. `run_pipeline` đọc
+        # để ghi vào nhật ký run. Phải là số chèn THẬT chứ không phải số bài gửi
+        # đi: upsert(ignore_duplicates=True) bỏ qua bài đã có, nên hai con số
+        # thường lệch nhau và chỉ con số này nói đúng "chu kỳ thu được gì mới".
+        self.last_saved_count: int | None = None
 
     def _get_client(self) -> Client:
         if self._client is None:
@@ -63,6 +68,7 @@ class SupabaseStorageAgent(BaseAgent):
     async def execute(self, ctx: PipelineContext) -> PipelineContext:
         if not ctx.articles:
             self.log_info("Không có bài báo nào để lưu.")
+            self.last_saved_count = 0
             return ctx
 
         rows = [self._article_to_row(art, ctx.topic) for art in ctx.articles]
@@ -72,6 +78,7 @@ class SupabaseStorageAgent(BaseAgent):
         # run_pipeline dừng chu kỳ. Nuốt lỗi tại chỗ sẽ vô hiệu hoá is_critical
         # và biến "mất toàn bộ dữ liệu" thành một dòng log không ai đọc.
         inserted = await asyncio.to_thread(self._insert_sync, rows)
+        self.last_saved_count = inserted
         self.log_info(f"Đã lưu thành công {inserted} bài mới vào Supabase.")
 
         return ctx

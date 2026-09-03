@@ -26,7 +26,22 @@ Iron Laws: L03 async-first, L05 FastAPI, L08 type hints + docstring.
 from fastapi import FastAPI
 
 from ai_trend_agent import __version__
-from ai_trend_agent.api.routers import health
+from ai_trend_agent.api.errors import install_error_handlers
+from ai_trend_agent.api.rate_limit import install_rate_limit
+from ai_trend_agent.worker.main import _load_env_file
+
+# Nạp `.env` NGAY khi import, trước khi bất kỳ dependency nào đọc biến môi trường.
+#
+# Thiếu dòng này thì chạy `ai-trend-api` ở máy dev sẽ không có SUPABASE_URL /
+# SUPABASE_KEY: repository không dựng được client, `/health/ready` báo 503 và
+# `POST /runs` trả 409 vì `has_active()` fail-closed. Triệu chứng trông như lỗi
+# nghiệp vụ trong khi nguyên nhân chỉ là thiếu cấu hình — đã mắc đúng bẫy này
+# một lần khi đo AC-04.2.
+#
+# Trong container thì không có file `.env` nào và hàm này im lặng bỏ qua —
+# biến môi trường đến từ K8s Secret.
+_load_env_file()
+from ai_trend_agent.api.routers import articles, health, runs, trends
 
 # Mô tả hiển thị ngay đầu trang /docs — coi như trang bìa của API.
 _DESCRIPTION = """
@@ -40,6 +55,9 @@ Xem thêm: [repo trên GitHub](https://github.com/dokhacduc29/Project_AI_trend_a
 
 # Nhóm endpoint trong Swagger cho dễ đọc, thay vì một danh sách phẳng.
 _TAGS_METADATA = [
+    {"name": "articles", "description": "Truy vấn bài viết đã thu thập — phân trang và lọc."},
+    {"name": "trends", "description": "Báo cáo xu hướng do AI tổng hợp mỗi chu kỳ."},
+    {"name": "runs", "description": "Kích hoạt và theo dõi chu kỳ pipeline (async job)."},
     {"name": "health", "description": "Probe hạ tầng cho Kubernetes (liveness / readiness)."},
 ]
 
@@ -52,6 +70,23 @@ app = FastAPI(
     redoc_url=None,       # Chỉ giữ Swagger; ReDoc không thêm giá trị ở dự án này.
     openapi_url="/openapi.json",
 )
+
+# [FR-09] Gắn handler RFC 7807 TRƯỚC khi khai báo router, để mọi lỗi — kể cả
+# 404 do không khớp route nào — đều ra cùng một hình dạng. Nếu bỏ bước này,
+# client gặp ba định dạng lỗi khác nhau tuỳ loại: HTTPException, lỗi
+# validation của Pydantic, và HTML 500 của Starlette.
+install_error_handlers(app)
+
+# [L05] Rate limit — nửa còn lại của luật "API phải có pagination + rate limit".
+# Hàm này CHỈ gắn handler 429 (theo RFC 7807, thay hình dạng mặc định của
+# slowapi). Hạn mức thật nằm ở decorator trên từng endpoint, không ở middleware
+# — lý do dài trong `api/rate_limit.py`.
+install_rate_limit(app)
+
+# Tài nguyên nghiệp vụ nằm dưới /api/v1 (prefix khai trong chính router).
+app.include_router(articles.router)
+app.include_router(trends.router)
+app.include_router(runs.router)
 
 # Health nằm ở GỐC (không có /api/v1) — xem giải thích ở docstring đầu file.
 app.include_router(health.router)

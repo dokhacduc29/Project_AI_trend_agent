@@ -79,3 +79,23 @@ DISCORD_SUPPRESS_EMBEDS_FLAG: int = 4    # Bitflag SUPPRESS_EMBEDS — tắt unf
 # --- STORAGE CONFIG ---
 OUTPUT_DIR: str = "data"             # Thư mục lưu file CSV
 CSV_FIELDNAMES: list[str] = ["STT", "Tieu_De", "Nguon", "Ngay", "Tags", "Tom_Tat", "Tam_Ly", "Link_Bai"]
+
+# --- API RATE LIMIT (v5.0 — Luật Thép L05) ---
+# L05 đòi API phải có phân trang VÀ rate limit. Phân trang có từ B2; đây là nửa
+# còn lại. Chuỗi theo cú pháp của `limits` (thư viện slowapi dựa lên).
+#
+# Vì sao hai mức khác nhau: endpoint ĐỌC chỉ tốn một truy vấn Postgres, còn
+# `POST /runs` kích hoạt một chu kỳ ~45 giây tiêu hạn mức Gemini (ràng buộc
+# C-03). Cho hai loại chung một hạn mức là hoặc bóp nghẹt đường đọc, hoặc mở
+# toang đường ghi.
+RATE_LIMIT_READ: str = "60/minute"    # DÙNG CHUNG cho mọi endpoint đọc, tính theo IP
+RATE_LIMIT_WRITE: str = "6/minute"    # Riêng POST /runs; has_active() vẫn là hàng rào chính
+
+# --- RUN MỒ CÔI (v5.0) ---
+# `BackgroundTasks` chạy trong tiến trình API. Pod bị kill giữa chu kỳ thì bản
+# ghi run mắc kẹt ở `running` vĩnh viễn, và `has_active()` từ đó chặn MỌI
+# POST /runs — endpoint tự khoá chính nó, không có đường hồi.
+#
+# Quá ngưỡng này thì coi run là đã chết. Chu kỳ thật đo được ~45 giây, nên 15
+# phút là biên 20 lần — đủ rộng để không cắt nhầm một chu kỳ chậm bất thường.
+RUN_STALE_AFTER_SECONDS: int = 900   # 15 phút
