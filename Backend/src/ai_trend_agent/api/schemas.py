@@ -41,6 +41,16 @@ class SentimentOut(str, Enum):
     BEARISH = "bearish"
     NEUTRAL = "neutral"
 
+    def to_domain(self) -> Sentiment:
+        """
+        Dịch ngược sang enum domain, dùng khi client LỌC theo sentiment.
+
+        Chiều xuôi (domain → công khai) nằm ở `_SENTIMENT_MAP` bên dưới; chiều
+        này cần cho `?sentiment=bullish` biến thành `Sentiment.BULLISH` rồi
+        repository mới đổi tiếp thành chuỗi tiếng Việt mà DB đang lưu.
+        """
+        return _DOMAIN_BY_OUT[self]
+
 
 # Ánh xạ domain -> công khai. Đặt tường minh thay vì suy từ tên enum, để đổi
 # một bên không âm thầm kéo bên kia đổi theo.
@@ -49,6 +59,9 @@ _SENTIMENT_MAP: dict[Sentiment, SentimentOut] = {
     Sentiment.BEARISH: SentimentOut.BEARISH,
     Sentiment.NEUTRAL: SentimentOut.NEUTRAL,
 }
+
+# Chiều ngược lại, dựng tự động từ bảng trên để hai chiều không bao giờ lệch nhau.
+_DOMAIN_BY_OUT: dict[SentimentOut, Sentiment] = {v: k for k, v in _SENTIMENT_MAP.items()}
 
 
 class ArticleOut(BaseModel):
