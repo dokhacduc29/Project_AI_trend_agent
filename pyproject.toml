@@ -19,6 +19,9 @@ dependencies = [
     "google-genai==2.7.0",
     "supabase==2.31.0",
     "msgpack>=1.2.1",
+    # [v5.0 B2] Tang REST API
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +34,10 @@ dev = [
 # one-shot cua CronJob - ADR 0011). Thay cho `python .../main.py` duong dan dai.
 [project.scripts]
 ai-trend-worker = "ai_trend_agent.worker.main:cli"
+# `ai-trend-api` chay ASGI server. Hai console script = hai cua vao cua CUNG
+# mot package: worker chay mot chu ky roi thoat (CronJob), api phuc vu HTTP
+# lien tuc (Deployment). Dung chung image, khac CMD.
+ai-trend-api = "ai_trend_agent.api.main:run"
 
 [project.urls]
 Repository = "https://github.com/dokhacduc29/Project_AI_trend_agent"
