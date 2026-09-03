@@ -28,6 +28,14 @@ msgpack>=1.2.1          # Dep bắc cầu (qua supabase/realtime). 1.1.2 dính G
 # --- [v5.0 / B2] Tầng REST API (SRS mục 6) ---
 fastapi==0.141.1        # Framework API — Iron Law L05 bắt buộc dùng FastAPI nếu làm API.
                         # Kéo theo pydantic 2.x (đã có sẵn qua supabase) + starlette.
+slowapi==0.1.10         # Rate limit (Luật Thép L05). Kéo theo `limits` + `deprecated`
+                        # + `wrapt` — 4 package chứ không phải 1, đã đếm.
+                        # CẢNH BÁO: `SlowAPIMiddleware` của bản này KHÔNG chạy
+                        # được với FastAPI 0.141 — `_IncludedRouter` không có
+                        # thuộc tính `endpoint` nên mọi route bị coi là miễn trừ,
+                        # im lặng, không exception. Dự án dùng decorator thay vì
+                        # middleware. NÂNG FASTAPI HAY SLOWAPI ĐỀU PHẢI ĐO LẠI —
+                        # xem api/rate_limit.py.
 uvicorn[standard]==0.52.4  # ASGI server chạy app. Extra `standard` thêm uvloop/httptools
                         # (nhanh hơn) và websockets. Worker CronJob KHÔNG dùng gói này,
                         # nhưng dùng chung một image nên vẫn cài — xem ADR 0015.

@@ -59,6 +59,11 @@ async def liveness() -> LivenessResponse:
     """
     Liveness probe cho Kubernetes.
 
+    [L05] CỐ Ý KHÔNG gắn rate limit. Probe gọi vài giây một lần và mọi probe
+    tới từ CÙNG một IP (node). Đếm chúng vào hạn mức thì sớm muộn có probe ăn
+    429, K8s coi đó là probe trượt rồi restart pod — rate limit tự tay gây ra
+    đúng sự cố nó sinh ra để ngăn.
+
     Cố ý KHÔNG chạm tới database hay bất kỳ dịch vụ ngoài nào: mục đích duy nhất
     là phân biệt "tiến trình treo/chết" với "tiến trình sống". Phải trả lời rất
     nhanh (NFR: dưới 50ms) vì probe gọi lặp lại liên tục.
@@ -111,6 +116,9 @@ class ReadinessResponse(BaseModel):
 async def readiness(repo: ArticleRepositoryDep) -> ReadinessResponse | JSONResponse:
     """
     Readiness probe cho Kubernetes (FR-07).
+
+    [L05] CỐ Ý KHÔNG gắn rate limit — cùng lý do với `/health`, và ở đây hậu
+    quả còn nặng hơn: probe readiness trượt thì K8s cắt traffic khỏi pod khoẻ.
 
     KHÁC LIVENESS Ở CHỖ NÀO: ở đây MỚI được chạm dependency ngoài. DB chết thì
     trả 503 → K8s ngừng đẩy traffic vào pod nhưng KHÔNG giết pod. DB hồi thì pod

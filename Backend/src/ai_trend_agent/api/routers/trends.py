@@ -16,9 +16,10 @@ VÌ SAO KHÔNG SINH XU HƯỚNG NGAY LÚC GỌI:
 Iron Laws: L03 async, L08 type hints + docstring.
 =====================================================================
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Response
 
 from ai_trend_agent.api.dependencies import RunRepositoryDep
+from ai_trend_agent.api.rate_limit import read_limit
 from ai_trend_agent.api.errors import NotFoundProblem
 from ai_trend_agent.api.schemas import TrendReportOut
 
@@ -40,7 +41,10 @@ router = APIRouter(prefix="/api/v1/trends", tags=["trends"])
     ),
     responses={404: {"description": "Chưa có chu kỳ nào sinh được báo cáo xu hướng"}},
 )
-async def latest_trend(repo: RunRepositoryDep) -> TrendReportOut:
+@read_limit
+async def latest_trend(
+    request: Request, response: Response, repo: RunRepositoryDep
+) -> TrendReportOut:
     """
     FR-03 — báo cáo xu hướng mới nhất.
 
@@ -49,6 +53,10 @@ async def latest_trend(repo: RunRepositoryDep) -> TrendReportOut:
               object rỗng — object rỗng buộc client phải tự đoán xem đó là "hệ
               thống chưa chạy" hay "chạy rồi mà không có xu hướng nào".
     [AC-03.3] Xu hướng sắp xếp giảm dần theo số bài liên quan.
+
+    [L05] `request` và `response` không dùng trong thân hàm nhưng BẮT BUỘC phải
+    có: slowapi tìm `request` theo tên để lấy IP, và nhét `X-RateLimit-*` vào
+    `response`. Thiếu `response` thì endpoint trả 500 ở ĐƯỜNG THÀNH CÔNG.
     """
     run = await repo.latest_with_trend()
     if run is None or run.trend_report is None:

@@ -30,12 +30,13 @@ import logging
 import os
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from supabase import Client, create_client
 
 from ai_trend_agent.application.ports import Page
+from ai_trend_agent.domain import config
 from ai_trend_agent.domain.models import (
     PipelineRun,
     RunStatus,
@@ -187,8 +188,16 @@ class SupabaseRunRepository:
         `run_id` về cho client ngay trong response 202, nên phải biết id trước
         khi (và độc lập với việc) ghi xuống DB thành công.
 
-        Nuốt lỗi và vẫn trả về id: id đã có giá trị dùng được cho luồng phía
-        sau kể cả khi DB từ chối ghi.
+        NÉM LỖI khi không ghi được — NGOẠI LỆ DUY NHẤT của file này, và là
+        chủ ý. Trước đây method này nuốt lỗi rồi vẫn trả `run_id`, lý do ghi
+        trong comment cũ là "id đã có giá trị dùng được cho luồng phía sau".
+        Lý do đó sai ở đường API: `POST /runs` lấy chính `run_id` này làm
+        `status_url` trả cho client, nên id của một bản ghi KHÔNG TỒN TẠI là
+        một lời hứa suông — client hỏi mãi mà chỉ nhận 404.
+
+        Mỗi call site tự quyết định thay vì bắt method này đoán hộ:
+          - worker bọc `_safe_run_log` → chu kỳ vẫn chạy, chỉ mất nhật ký
+          - API bắt lại → trả 503, không hứa cái mình không giữ được
         """
         run_id = str(uuid.uuid4())
         row = {
@@ -201,6 +210,7 @@ class SupabaseRunRepository:
             await asyncio.to_thread(self._insert_sync, row)
         except Exception:
             _logger.error("Khong ghi duoc ban ghi run moi (run_id=%s)", run_id, exc_info=True)
+            raise
         return run_id
 
     async def mark_running(self, run_id: str) -> None:
@@ -314,12 +324,74 @@ class SupabaseRunRepository:
         items = [run for run in (_row_to_run(r) for r in rows) if run is not None]
         return Page(items=items, total_items=total, page=page, size=size)
 
+    @staticmethod
+    def _stale_cutoff() -> str:
+        """
+        Mốc thời gian: run tạo TRƯỚC mốc này mà chưa xong thì coi như đã chết.
+
+        Tính ở phía ứng dụng chứ không dùng `now()` của Postgres vì PostgREST
+        không cho nhét biểu thức SQL vào bộ lọc. Cả hai đồng hồ đều chạy UTC
+        nên lệch không đáng kể so với biên 15 phút.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            seconds=config.RUN_STALE_AFTER_SECONDS
+        )
+        return cutoff.isoformat()
+
+    def _reap_stale_sync(self) -> int:
+        """
+        Đánh dấu `failed` cho mọi run chưa xong đã quá hạn.
+
+        `select="run_id"` để PostgREST trả về các dòng vừa cập nhật — đó là
+        cách duy nhất biết đã dọn bao nhiêu bản ghi.
+        """
+        res = (
+            self._get_client()
+            .table(_TABLE)
+            .update(
+                {
+                    "status": RunStatus.FAILED.value,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "error": (
+                        f"Run mo coi: qua {config.RUN_STALE_AFTER_SECONDS}s khong ket thuc. "
+                        "Nhieu kha nang tien trinh API da chet giua chu ky "
+                        "(BackgroundTasks khong song sot qua viec pod bi kill)."
+                    ),
+                }
+            )
+            .in_("status", [RunStatus.QUEUED.value, RunStatus.RUNNING.value])
+            .lt("created_at", self._stale_cutoff())
+            .execute()
+        )
+        return len(res.data or [])
+
+    async def reap_stale(self) -> int:
+        """
+        Đóng sổ run mắc kẹt, trả về số bản ghi đã dọn (0 nếu không có gì).
+
+        BEST-EFFORT: hỏng thì trả 0 và log, không raise. Đây là việc dọn dẹp
+        ăn theo, không phải việc chính của request nào — để nó làm hỏng
+        `POST /runs` là đổi một vấn đề nhỏ lấy một vấn đề lớn.
+        """
+        try:
+            n = await asyncio.to_thread(self._reap_stale_sync)
+        except Exception:
+            _logger.error("Khong don duoc run mo coi", exc_info=True)
+            return 0
+        if n:
+            _logger.warning("Da dong so %d run mo coi (qua han chua ket thuc)", n)
+        return n
+
     def _has_active_sync(self) -> bool:
         res = (
             self._get_client()
             .table(_TABLE)
             .select("run_id", count="exact")
             .in_("status", [RunStatus.QUEUED.value, RunStatus.RUNNING.value])
+            # Run quá hạn coi như đã chết cùng cái pod sinh ra nó. Không có
+            # điều kiện này thì một pod bị kill giữa chu kỳ để lại một dòng
+            # `running` chặn MỌI POST /runs về sau — endpoint tự khoá chính nó.
+            .gte("created_at", self._stale_cutoff())
             .limit(1)
             .execute()
         )

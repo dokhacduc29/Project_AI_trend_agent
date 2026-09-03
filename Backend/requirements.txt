@@ -13,5 +13,6 @@ pytest==8.3.4           # [Phase 5] Khung Unit Testing chuyên nghiệp
 pytest-asyncio==0.25.0  # [Phase 5] Hỗ trợ kiểm thử các hàm async/await
 supabase==2.31.0        # [Phase 5] Supabase Python client — đồng bộ với requirements-runtime.txt (ADR 0012)
 fastapi==0.141.1        # [v5.0 B2] Tầng REST API — đồng bộ với requirements-runtime.txt
+slowapi==0.1.10         # [v5.0] Rate limit — đồng bộ với requirements-runtime.txt
 uvicorn[standard]==0.52.4  # [v5.0 B2] ASGI server — đồng bộ với requirements-runtime.txt
                         # TestClient của FastAPI dùng httpx — đã khai báo ở đầu file.

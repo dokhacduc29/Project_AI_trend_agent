@@ -15,9 +15,10 @@ Iron Laws: L03 async, L05 pagination, L08 type hints + docstring.
 """
 from datetime import date
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Request, Response
 
 from ai_trend_agent.api.dependencies import ArticleRepositoryDep
+from ai_trend_agent.api.rate_limit import read_limit
 from ai_trend_agent.api.errors import FieldError, NotFoundProblem, ProblemException
 from ai_trend_agent.api.schemas import ArticleOut, PaginatedResponse, SentimentOut
 from ai_trend_agent.application.ports import ArticleFilters, ArticleSort
@@ -38,7 +39,10 @@ router = APIRouter(prefix="/api/v1/articles", tags=["articles"])
         "Bài chưa phân tích có `analyzed: false` và `sentiment: null`."
     ),
 )
+@read_limit
 async def list_articles(
+    request: Request,
+    response: Response,
     repo: ArticleRepositoryDep,
     page: int = Query(1, ge=1, description="Trang hiện tại, đếm từ 1"),
     size: int = Query(20, ge=1, le=100, description="Số bản ghi mỗi trang, tối đa 100"),
@@ -54,6 +58,10 @@ async def list_articles(
     [AC-01.4] Không có bản ghi nào khớp thì trả 200 với `items: []`, KHÔNG trả
     404. Danh sách rỗng là một câu trả lời hợp lệ; 404 nghĩa là "đường dẫn này
     không tồn tại", hoàn toàn khác nghĩa.
+
+    [L05] `request` và `response` không dùng trong thân hàm nhưng BẮT BUỘC phải
+    có: slowapi tìm `request` theo tên để lấy IP, và nhét `X-RateLimit-*` vào
+    `response`. Thiếu `response` thì endpoint trả 500 ở ĐƯỜNG THÀNH CÔNG.
     """
     # [AC-01.6] Kiểm tra LIÊN TRƯỜNG. FastAPI kiểm được từng tham số riêng lẻ
     # (ge/le/max_length) nhưng không biết quan hệ giữa hai tham số. Phải tự
@@ -92,7 +100,10 @@ async def list_articles(
     summary="Chi tiết một bài viết",
     responses={404: {"description": "Không tìm thấy bài viết"}},
 )
+@read_limit
 async def get_article(
+    request: Request,
+    response: Response,
     repo: ArticleRepositoryDep,
     article_id: int = Path(description="Khoá chính của bài viết", ge=1),
 ) -> ArticleOut:
@@ -102,6 +113,10 @@ async def get_article(
     [AC-02.2] Không tồn tại thì 404 theo RFC 7807.
     [AC-02.3] `article_id` không phải số nguyên thì FastAPI tự trả 422 nhờ khai
     kiểu `int` ở tham số path — không phải viết tay, và không bao giờ thành 500.
+
+    [L05] `request` và `response` không dùng trong thân hàm nhưng BẮT BUỘC phải
+    có: slowapi tìm `request` theo tên để lấy IP, và nhét `X-RateLimit-*` vào
+    `response`. Thiếu `response` thì endpoint trả 500 ở ĐƯỜNG THÀNH CÔNG.
     """
     article = await repo.get_by_id(article_id)
     if article is None:

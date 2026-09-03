@@ -27,6 +27,7 @@ from fastapi import FastAPI
 
 from ai_trend_agent import __version__
 from ai_trend_agent.api.errors import install_error_handlers
+from ai_trend_agent.api.rate_limit import install_rate_limit
 from ai_trend_agent.worker.main import _load_env_file
 
 # Nạp `.env` NGAY khi import, trước khi bất kỳ dependency nào đọc biến môi trường.
@@ -75,6 +76,12 @@ app = FastAPI(
 # client gặp ba định dạng lỗi khác nhau tuỳ loại: HTTPException, lỗi
 # validation của Pydantic, và HTML 500 của Starlette.
 install_error_handlers(app)
+
+# [L05] Rate limit — nửa còn lại của luật "API phải có pagination + rate limit".
+# Hàm này CHỈ gắn handler 429 (theo RFC 7807, thay hình dạng mặc định của
+# slowapi). Hạn mức thật nằm ở decorator trên từng endpoint, không ở middleware
+# — lý do dài trong `api/rate_limit.py`.
+install_rate_limit(app)
 
 # Tài nguyên nghiệp vụ nằm dưới /api/v1 (prefix khai trong chính router).
 app.include_router(articles.router)

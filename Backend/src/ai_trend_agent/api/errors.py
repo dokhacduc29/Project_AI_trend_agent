@@ -121,6 +121,24 @@ class ConflictProblem(ProblemException):
         super().__init__(status=409, title=title, detail=detail, type_slug="conflict")
 
 
+class ServiceUnavailableProblem(ProblemException):
+    """
+    503 — server nhận được yêu cầu nhưng không thực hiện nổi lúc này.
+
+    Dùng khi `POST /runs` không ghi nổi bản ghi run xuống DB. Vì sao KHÔNG trả
+    202 trong trường hợp đó: bản ghi run chính là tài nguyên client vừa yêu
+    cầu, không phải nhật ký phụ. Trả 202 kèm `run_id` không tồn tại là nói dối
+    — client sẽ hỏi `status_url` mãi mà chỉ nhận 404.
+
+    503 chứ không phải 500: lỗi này THOÁNG QUA và thử lại là hợp lý.
+    """
+
+    def __init__(self, detail: str, *, title: str = "Service unavailable") -> None:
+        super().__init__(
+            status=503, title=title, detail=detail, type_slug="service-unavailable"
+        )
+
+
 class UnauthorizedProblem(ProblemException):
     """401 — thiếu hoặc sai API key ở endpoint ghi (FR-04 AC-04.3)."""
 
@@ -130,7 +148,7 @@ class UnauthorizedProblem(ProblemException):
         )
 
 
-def _problem_response(
+def build_problem_response(
     *,
     status: int,
     title: str,
@@ -139,7 +157,13 @@ def _problem_response(
     type_slug: str,
     errors: list[FieldError] | None = None,
 ) -> JSONResponse:
-    """Dựng response RFC 7807. Mọi handler bên dưới đều đi qua đây — một chỗ duy nhất."""
+    """
+    Dựng response RFC 7807. Mọi handler bên dưới đều đi qua đây — một chỗ duy nhất.
+
+    Công khai (không còn tiền tố `_`) vì `api/rate_limit.py` cũng phải dựng
+    response 429 theo đúng hình dạng này. Có hai chỗ sinh response lỗi thì phải
+    có một chỗ định nghĩa hình dạng, không phải hai.
+    """
     body: dict[str, Any] = {
         "type": f"{PROBLEM_TYPE_BASE}/{type_slug}",
         "title": title,
@@ -162,6 +186,7 @@ _TITLE_BY_STATUS: dict[int, str] = {
     405: "Method not allowed",
     409: "Conflict",
     429: "Too many requests",
+    503: "Service unavailable",
 }
 
 _SLUG_BY_STATUS: dict[int, str] = {
@@ -172,6 +197,7 @@ _SLUG_BY_STATUS: dict[int, str] = {
     405: "method-not-allowed",
     409: "conflict",
     429: "rate-limit",
+    503: "service-unavailable",
 }
 
 
@@ -186,7 +212,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProblemException)
     async def _handle_problem(request: Request, exc: ProblemException) -> JSONResponse:
         """Lỗi do router chủ động ném — đã có sẵn đủ thông tin."""
-        return _problem_response(
+        return build_problem_response(
             status=exc.status,
             title=exc.title,
             detail=exc.detail,
@@ -202,7 +228,7 @@ def install_error_handlers(app: FastAPI) -> None:
         sai method... Bắt luôn để những lỗi này cũng cùng hình dạng — nếu
         không, client vẫn gặp `{"detail": ...}` ở các đường không ngờ tới.
         """
-        return _problem_response(
+        return build_problem_response(
             status=exc.status_code,
             title=_TITLE_BY_STATUS.get(exc.status_code, "HTTP error"),
             detail=str(exc.detail),
@@ -230,7 +256,7 @@ def install_error_handlers(app: FastAPI) -> None:
             )
             for err in exc.errors()
         ]
-        return _problem_response(
+        return build_problem_response(
             status=422,
             title="Validation failed",
             detail="Dữ liệu gửi lên không hợp lệ",
@@ -255,7 +281,7 @@ def install_error_handlers(app: FastAPI) -> None:
         _logger.error(
             "Loi khong luong truoc tai %s %s", request.method, request.url.path, exc_info=True
         )
-        return _problem_response(
+        return build_problem_response(
             status=500,
             title="Internal server error",
             detail="Đã xảy ra lỗi phía máy chủ. Vui lòng thử lại sau.",

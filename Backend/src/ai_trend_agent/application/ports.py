@@ -198,13 +198,28 @@ class RunRepository(Protocol):
     Ba method đầu là ĐƯỜNG GHI, đủ cho worker ghi nhật ký chu kỳ của mình.
     Bốn method sau là ĐƯỜNG ĐỌC, phục vụ FR-03 và FR-04→06.
 
-    LƯU Ý VỀ TÍNH CHỊU LỖI: mọi lời gọi ở đây là ENRICHMENT theo phân loại của
-    ADR 0003. Ghi nhật ký hỏng thì log rồi đi tiếp — tuyệt đối không được làm
-    chết chu kỳ thu thập dữ liệu. Mất một dòng nhật ký còn hơn mất cả mẻ tin.
+    LƯU Ý VỀ TÍNH CHỊU LỖI — CÓ MỘT NGOẠI LỆ, ĐỌC KỸ:
+    Với WORKER, mọi lời gọi ở đây là ENRICHMENT theo phân loại ADR 0003. Ghi
+    nhật ký hỏng thì log rồi đi tiếp — không được làm chết chu kỳ thu thập.
+    Mất một dòng nhật ký còn hơn mất cả mẻ tin. Bảo đảm đó nằm ở call site
+    (`worker/main._safe_run_log`), không nằm trong bản hiện thực.
+
+    Với API thì `create()` KHÔNG phải enrichment. Ở đường `POST /runs`, bản
+    ghi run chính là TÀI NGUYÊN client vừa yêu cầu — không phải nhật ký phụ
+    của một việc khác. Nuốt lỗi ở đó nghĩa là trả 202 kèm `run_id` không tồn
+    tại, rồi client hỏi `status_url` mãi mà chỉ nhận 404.
+
+    Nên `create()` NÉM LỖI khi không ghi được. Mỗi call site tự quyết định:
+    worker bọc `_safe_run_log` để đi tiếp, API bắt lại và trả 503.
     """
 
     async def create(self, *, topic: str, trigger: RunTrigger) -> str:
-        """Tạo bản ghi run mới, trả về `run_id` (UUID dạng chuỗi)."""
+        """
+        Tạo bản ghi run mới, trả về `run_id` (UUID dạng chuỗi).
+
+        NÉM LỖI nếu không ghi được — xem giải thích ở docstring của lớp. Đây là
+        method DUY NHẤT ở đây để lỗi nổi lên; các method còn lại tự nuốt.
+        """
         ...
 
     async def mark_running(self, run_id: str) -> None:
@@ -254,12 +269,34 @@ class RunRepository(Protocol):
         """
         ...
 
+    async def reap_stale(self) -> int:
+        """
+        Đóng sổ những run mắc kẹt, trả về số bản ghi đã dọn.
+
+        VÌ SAO CẦN: `BackgroundTasks` chạy trong tiến trình API. Pod bị kill
+        giữa chu kỳ thì bản ghi nằm lại ở `running` vĩnh viễn — không ai đóng
+        sổ hộ, vì tiến trình lẽ ra làm việc đó đã chết.
+
+        Hai hậu quả, cái sau nặng hơn: `GET /runs` khai báo có chu kỳ đang chạy
+        trong khi không có gì chạy cả; và `has_active()` từ đó chặn MỌI
+        `POST /runs` — endpoint tự khoá chính nó, không có đường hồi ngoài việc
+        vào SQL Editor sửa tay.
+
+        Là thao tác BEST-EFFORT: hỏng thì trả 0 và log, không raise. Nó chỉ dọn
+        dẹp, không phải việc chính của bất kỳ request nào.
+        """
+        ...
+
     async def has_active(self) -> bool:
         """
         Có run nào đang `queued` hoặc `running` không (FR-04 AC-04.4).
 
         Dùng để chặn kích hoạt chu kỳ mới khi còn chu kỳ chưa xong — vừa tránh
         ghi đè dữ liệu, vừa là hàng rào bảo vệ hạn mức Gemini (ràng buộc C-03).
+
+        CHỈ TÍNH RUN CÒN TRONG HẠN (`config.RUN_STALE_AFTER_SECONDS`). Run quá
+        hạn coi như đã chết cùng cái pod sinh ra nó, không được phép chặn ai
+        nữa — xem `reap_stale()`.
 
         HẠN CHẾ ĐÃ BIẾT: kiểm tra rồi mới tạo là hai thao tác tách rời, nên hai
         request đến CÙNG LÚC có thể cùng vượt qua. Ở v5.0 chỉ chạy một instance

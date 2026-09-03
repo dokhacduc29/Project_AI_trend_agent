@@ -34,10 +34,15 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Path, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Path, Query, Request, Response, status
 
 from ai_trend_agent.api.dependencies import RequireApiKey, RunRepositoryDep
-from ai_trend_agent.api.errors import ConflictProblem, NotFoundProblem
+from ai_trend_agent.api.errors import (
+    ConflictProblem,
+    NotFoundProblem,
+    ServiceUnavailableProblem,
+)
+from ai_trend_agent.api.rate_limit import read_limit, write_limit
 from ai_trend_agent.api.schemas import (
     PaginatedResponse,
     RunAcceptedOut,
@@ -119,9 +124,13 @@ async def _execute_pipeline(run_repo: RunRepository, run_id: str, topic: str) ->
     responses={
         401: {"description": "Thiếu hoặc sai X-API-Key"},
         409: {"description": "Đã có chu kỳ đang chạy"},
+        429: {"description": "Vượt hạn mức request"},
+        503: {"description": "Không ghi được bản ghi chu kỳ — thử lại sau"},
     },
 )
+@write_limit
 async def create_run(
+    request: Request,
     body: RunCreateRequest,
     background: BackgroundTasks,
     response: Response,
@@ -135,14 +144,38 @@ async def create_run(
     [AC-04.4] Đang có chu kỳ `queued`/`running` thì trả 409, không xếp thêm.
     [AC-04.5] Bản ghi run được tạo TRƯỚC khi response rời đi, nên `status_url`
               luôn hỏi được ngay lập tức, không có khoảng trống 404.
+
+    [L05] Hạn mức chặt hơn đường đọc: mỗi lần gọi tiêu một suất hạn mức Gemini
+    (C-03). `has_active()` chặn chu kỳ chạy song song nhưng không chặn được ai
+    bắn liên tục để dò key.
+
+    Tham số `request` không dùng trong thân hàm nhưng BẮT BUỘC phải có:
+    `@limiter.limit` của slowapi tìm nó theo tên để lấy IP người gọi.
     """
+    # Dọn run mồ côi TRƯỚC khi kiểm tra. Pod chết giữa chu kỳ để lại một dòng
+    # `running` không ai đóng sổ hộ; không dọn thì `has_active()` chặn vĩnh
+    # viễn và endpoint tự khoá chính nó. Best-effort — `reap_stale` nuốt lỗi
+    # bên trong, hỏng thì chỉ là không dọn được lần này.
+    await repo.reap_stale()
+
     if await repo.has_active():
         raise ConflictProblem(
             "Đã có chu kỳ đang chạy. Chờ hoàn tất trước khi kích hoạt chu kỳ mới.",
             title="Run already in progress",
         )
 
-    run_id = await repo.create(topic=body.topic, trigger=RunTrigger.API)
+    # [AC-04.5] Ghi hỏng thì KHÔNG trả 202. Bản ghi run là tài nguyên client
+    # vừa yêu cầu, không phải nhật ký phụ — trả 202 kèm `run_id` không tồn tại
+    # là hứa một `status_url` chỉ trả 404 mãi mãi. 503 chứ không phải 500 vì
+    # lỗi này thoáng qua và thử lại là hợp lý.
+    try:
+        run_id = await repo.create(topic=body.topic, trigger=RunTrigger.API)
+    except Exception:
+        _logger.error("Khong tao duoc ban ghi run cho POST /runs", exc_info=True)
+        raise ServiceUnavailableProblem(
+            "Không ghi được bản ghi chu kỳ. Vui lòng thử lại sau.",
+            title="Cannot record run",
+        ) from None
 
     # `Location` là header chuẩn cho 202: client theo dõi tiến độ ở đây. Nhiều
     # thư viện HTTP tự đọc header này, không cần parse body.
@@ -171,7 +204,10 @@ async def create_run(
         "do API kích hoạt (`api`) hay do lịch CronJob (`cronjob`)."
     ),
 )
+@read_limit
 async def list_runs(
+    request: Request,
+    response: Response,
     repo: RunRepositoryDep,
     page: int = Query(1, ge=1, description="Trang hiện tại"),
     size: int = Query(20, ge=1, le=100, description="Số bản ghi mỗi trang"),
@@ -188,6 +224,10 @@ async def list_runs(
 
     Tham số HTTP tên `status` nhưng biến Python tên `run_status`: `status` trùng
     với module `fastapi.status` đã import ở đầu file.
+
+    [L05] `request` và `response` không dùng trong thân hàm nhưng BẮT BUỘC phải
+    có: slowapi tìm `request` theo tên để lấy IP, và nhét `X-RateLimit-*` vào
+    `response`. Thiếu `response` thì endpoint trả 500 ở ĐƯỜNG THÀNH CÔNG.
     """
     page_result = await repo.list_paginated(page=page, size=size, status=run_status)
     return PaginatedResponse.from_run_page(page_result)
@@ -203,7 +243,10 @@ async def list_runs(
     ),
     responses={404: {"description": "Không tìm thấy chu kỳ"}},
 )
+@read_limit
 async def get_run(
+    request: Request,
+    response: Response,
     repo: RunRepositoryDep,
     run_id: str = Path(description="Định danh chu kỳ, dạng UUID"),
 ) -> RunOut:
@@ -214,6 +257,10 @@ async def get_run(
     [AC-05.2] Thất bại do agent critical thì `error` chứa tên agent gây lỗi.
     [AC-05.3] Enrichment agent lỗi vẫn là `succeeded` — đúng ngữ nghĩa ADR 0003.
     [AC-05.4] `duration_seconds` chỉ có giá trị khi `finished_at` khác null.
+
+    [L05] `request` và `response` không dùng trong thân hàm nhưng BẮT BUỘC phải
+    có: slowapi tìm `request` theo tên để lấy IP, và nhét `X-RateLimit-*` vào
+    `response`. Thiếu `response` thì endpoint trả 500 ở ĐƯỜNG THÀNH CÔNG.
     """
     run = await repo.get(run_id)
     if run is None:
