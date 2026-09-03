@@ -88,6 +88,7 @@ async def run_pipeline(
     ctx: PipelineContext,
     run_repo: "RunRepository | None" = None,
     trigger: RunTrigger = RunTrigger.CRONJOB,
+    run_id: str | None = None,
 ) -> bool:
     """
     [FIX DIP] Nhận danh sách BaseAgent (abstraction), KHÔNG nhận concrete class.
@@ -118,11 +119,15 @@ async def run_pipeline(
     # [ADR 0005] Reset budget Gemini cho chu kỳ mới
     reset_budget()
 
-    run_id: str | None = None
+    # `run_id` có sẵn nghĩa là NGƯỜI GỌI đã tạo bản ghi trước (đường API: phải
+    # có id để trả trong response 202 — AC-04.5). Lúc đó không tạo thêm, tránh
+    # sinh hai bản ghi cho cùng một chu kỳ. Worker CronJob không truyền gì nên
+    # tự tạo như cũ.
     if run_repo is not None:
-        run_id = await _safe_run_log(
-            lambda: run_repo.create(topic=ctx.topic, trigger=trigger), "create"
-        )
+        if run_id is None:
+            run_id = await _safe_run_log(
+                lambda: run_repo.create(topic=ctx.topic, trigger=trigger), "create"
+            )
         if run_id is not None:
             await _safe_run_log(lambda: run_repo.mark_running(run_id), "mark_running")
             logging.info(f"[RUN] Bat dau ghi nhat ky chu ky: run_id={run_id}")

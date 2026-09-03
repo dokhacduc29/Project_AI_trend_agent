@@ -35,6 +35,7 @@ from typing import Any
 
 from supabase import Client, create_client
 
+from ai_trend_agent.application.ports import Page
 from ai_trend_agent.domain.models import (
     PipelineRun,
     RunStatus,
@@ -248,3 +249,64 @@ class SupabaseRunRepository:
         """Run `succeeded` gần nhất có báo cáo xu hướng (FR-03). None nếu chưa có."""
         row = await asyncio.to_thread(self._latest_with_trend_sync)
         return _row_to_run(row) if row else None
+
+    def _get_sync(self, run_id: str) -> dict[str, Any] | None:
+        res = self._get_client().table(_TABLE).select("*").eq("run_id", run_id).limit(1).execute()
+        rows = res.data or []
+        return rows[0] if rows else None
+
+    async def get(self, run_id: str) -> PipelineRun | None:
+        """Một run theo id (FR-05). None nếu không có — KHÔNG raise."""
+        try:
+            row = await asyncio.to_thread(self._get_sync, run_id)
+        except Exception:
+            # `run_id` sai định dạng UUID khiến Postgres từ chối truy vấn. Với
+            # API thì đó là "không tìm thấy", không phải lỗi máy chủ.
+            _logger.warning("Khong doc duoc run (run_id=%s)", run_id, exc_info=True)
+            return None
+        return _row_to_run(row) if row else None
+
+    def _list_sync(self, page: int, size: int, status: RunStatus | None):
+        q = self._get_client().table(_TABLE).select("*", count="exact")
+        if status is not None:
+            q = q.eq("status", status.value)
+        # Khoá phụ `created_at` cùng lý do với bug phân trang ở articles: nhiều
+        # run có thể chưa có `started_at` (NULL) nên khoá chính không đủ xác định.
+        q = q.order("started_at", desc=True).order("created_at", desc=True)
+        start = (page - 1) * size
+        res = q.range(start, start + size - 1).execute()
+        return (res.data or []), (res.count or 0)
+
+    async def list_paginated(
+        self, *, page: int = 1, size: int = 20, status: RunStatus | None = None
+    ) -> Page[PipelineRun]:
+        """Lịch sử chạy có phân trang (FR-06)."""
+        rows, total = await asyncio.to_thread(self._list_sync, page, size, status)
+        return Page(
+            items=[_row_to_run(r) for r in rows], total_items=total, page=page, size=size
+        )
+
+    def _has_active_sync(self) -> bool:
+        res = (
+            self._get_client()
+            .table(_TABLE)
+            .select("run_id", count="exact")
+            .in_("status", [RunStatus.QUEUED.value, RunStatus.RUNNING.value])
+            .limit(1)
+            .execute()
+        )
+        return bool(res.count)
+
+    async def has_active(self) -> bool:
+        """
+        Có chu kỳ nào đang chạy không (FR-04 AC-04.4).
+
+        Hỏng thì trả True — FAIL CLOSED. Không biết chắc là có đang chạy hay
+        không thì thà từ chối kích hoạt thêm: chu kỳ thừa đốt hạn mức Gemini
+        (C-03), còn một lần từ chối chỉ khiến người dùng thử lại.
+        """
+        try:
+            return await asyncio.to_thread(self._has_active_sync)
+        except Exception:
+            _logger.error("Khong kiem tra duoc run dang chay — coi nhu CO", exc_info=True)
+            return True

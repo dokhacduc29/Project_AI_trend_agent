@@ -196,11 +196,7 @@ class RunRepository(Protocol):
     Hợp đồng ghi lại lịch sử các lần chạy pipeline (FR-04 → FR-06).
 
     Ba method đầu là ĐƯỜNG GHI, đủ cho worker ghi nhật ký chu kỳ của mình.
-    `latest_with_trend` là method ĐỌC đầu tiên, thêm ở bước 8 để phục vụ FR-03.
-
-    Các method đọc còn lại (`get`, `list_paginated`, `has_active`) sẽ gia nhập
-    ở bước 9 khi làm router `/runs` — giữ nguyên tắc không khai báo method chưa
-    ai hiện thực.
+    Bốn method sau là ĐƯỜNG ĐỌC, phục vụ FR-03 và FR-04→06.
 
     LƯU Ý VỀ TÍNH CHỊU LỖI: mọi lời gọi ở đây là ENRICHMENT theo phân loại của
     ADR 0003. Ghi nhật ký hỏng thì log rồi đi tiếp — tuyệt đối không được làm
@@ -241,5 +237,33 @@ class RunRepository(Protocol):
         hoàn toàn dùng được.
 
         `None` khi chưa từng có chu kỳ nào sinh được xu hướng (AC-03.2).
+        """
+        ...
+
+    async def get(self, run_id: str) -> PipelineRun | None:
+        """Một run theo id, `None` nếu không có. KHÔNG raise (FR-05 AC-05.1)."""
+        ...
+
+    async def list_paginated(
+        self, *, page: int = 1, size: int = 20, status: RunStatus | None = None
+    ) -> Page[PipelineRun]:
+        """
+        Lịch sử chạy, phân trang (FR-06).
+
+        [AC-06.1] Mặc định sắp xếp giảm dần theo `started_at`.
+        """
+        ...
+
+    async def has_active(self) -> bool:
+        """
+        Có run nào đang `queued` hoặc `running` không (FR-04 AC-04.4).
+
+        Dùng để chặn kích hoạt chu kỳ mới khi còn chu kỳ chưa xong — vừa tránh
+        ghi đè dữ liệu, vừa là hàng rào bảo vệ hạn mức Gemini (ràng buộc C-03).
+
+        HẠN CHẾ ĐÃ BIẾT: kiểm tra rồi mới tạo là hai thao tác tách rời, nên hai
+        request đến CÙNG LÚC có thể cùng vượt qua. Ở v5.0 chỉ chạy một instance
+        nên xác suất thấp và hậu quả nhẹ (một chu kỳ thừa). Muốn chặt chẽ phải
+        dùng ràng buộc UNIQUE partial ở DB hoặc advisory lock — để lại cho sau.
         """
         ...

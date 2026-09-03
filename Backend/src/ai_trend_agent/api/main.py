@@ -27,7 +27,20 @@ from fastapi import FastAPI
 
 from ai_trend_agent import __version__
 from ai_trend_agent.api.errors import install_error_handlers
-from ai_trend_agent.api.routers import articles, health, trends
+from ai_trend_agent.worker.main import _load_env_file
+
+# Nạp `.env` NGAY khi import, trước khi bất kỳ dependency nào đọc biến môi trường.
+#
+# Thiếu dòng này thì chạy `ai-trend-api` ở máy dev sẽ không có SUPABASE_URL /
+# SUPABASE_KEY: repository không dựng được client, `/health/ready` báo 503 và
+# `POST /runs` trả 409 vì `has_active()` fail-closed. Triệu chứng trông như lỗi
+# nghiệp vụ trong khi nguyên nhân chỉ là thiếu cấu hình — đã mắc đúng bẫy này
+# một lần khi đo AC-04.2.
+#
+# Trong container thì không có file `.env` nào và hàm này im lặng bỏ qua —
+# biến môi trường đến từ K8s Secret.
+_load_env_file()
+from ai_trend_agent.api.routers import articles, health, runs, trends
 
 # Mô tả hiển thị ngay đầu trang /docs — coi như trang bìa của API.
 _DESCRIPTION = """
@@ -43,6 +56,7 @@ Xem thêm: [repo trên GitHub](https://github.com/dokhacduc29/Project_AI_trend_a
 _TAGS_METADATA = [
     {"name": "articles", "description": "Truy vấn bài viết đã thu thập — phân trang và lọc."},
     {"name": "trends", "description": "Báo cáo xu hướng do AI tổng hợp mỗi chu kỳ."},
+    {"name": "runs", "description": "Kích hoạt và theo dõi chu kỳ pipeline (async job)."},
     {"name": "health", "description": "Probe hạ tầng cho Kubernetes (liveness / readiness)."},
 ]
 
@@ -65,6 +79,7 @@ install_error_handlers(app)
 # Tài nguyên nghiệp vụ nằm dưới /api/v1 (prefix khai trong chính router).
 app.include_router(articles.router)
 app.include_router(trends.router)
+app.include_router(runs.router)
 
 # Health nằm ở GỐC (không có /api/v1) — xem giải thích ở docstring đầu file.
 app.include_router(health.router)

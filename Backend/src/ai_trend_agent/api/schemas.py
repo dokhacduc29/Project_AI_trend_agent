@@ -302,6 +302,125 @@ class PageMeta(BaseModel):
     )
 
 
+class RunCreateRequest(BaseModel):
+    """Body của `POST /runs` (FR-04)."""
+
+    topic: str = Field(
+        default="Artificial Intelligence",
+        min_length=1,
+        max_length=50,
+        description="Chủ đề cần thu thập. Tối đa 50 ký tự (AC-04.6).",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={"examples": [{"topic": "Artificial Intelligence"}]}
+    )
+
+
+class RunAcceptedOut(BaseModel):
+    """
+    Response 202 của `POST /runs` (FR-04).
+
+    Đây là ASYNC JOB PATTERN: server nhận việc, trả ngay `run_id` và đường dẫn
+    để theo dõi, rồi mới làm việc thật ở nền. Client KHÔNG phải giữ kết nối chờ
+    45 giây — nó hỏi lại `status_url` khi nào muốn.
+
+    Mã 202 (Accepted) chứ không phải 200 hay 201: 200 hàm ý "đã xong", 201 hàm ý
+    "đã tạo xong tài nguyên bạn yêu cầu". 202 nói đúng sự thật — *đã nhận, chưa
+    xong*.
+    """
+
+    run_id: str = Field(description="Định danh chu kỳ vừa được xếp lịch")
+    status: str = Field(description="Luôn là 'queued' tại thời điểm trả về")
+    topic: str = Field(description="Chủ đề của chu kỳ")
+    created_at: datetime = Field(description="Thời điểm nhận yêu cầu")
+    status_url: str = Field(description="Đường dẫn để hỏi tiến độ")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "run_id": "0193f2a1-8c4e-7b3a-9f21-5d8e4c1b2a09",
+                    "status": "queued",
+                    "topic": "Artificial Intelligence",
+                    "created_at": "2026-09-03T06:31:44Z",
+                    "status_url": "/api/v1/runs/0193f2a1-8c4e-7b3a-9f21-5d8e4c1b2a09",
+                }
+            ]
+        }
+    )
+
+
+class RunOut(BaseModel):
+    """Trạng thái và kết quả một chu kỳ (FR-05, FR-06)."""
+
+    run_id: str
+    status: str = Field(description="queued | running | succeeded | failed")
+    trigger: str = Field(description="api | cronjob | manual — ai đã khởi động chu kỳ này")
+    topic: str
+    started_at: datetime | None = Field(default=None)
+    finished_at: datetime | None = Field(default=None)
+    duration_seconds: float | None = Field(
+        default=None, description="null khi chu kỳ chưa kết thúc — cố ý không trả 0 để khỏi nhầm"
+    )
+    articles_scraped: int | None = Field(default=None, description="Số bài thô cào về")
+    articles_stored: int | None = Field(
+        default=None,
+        description=(
+            "Số bài THỰC SỰ lưu mới. Thường nhỏ hơn `articles_scraped` vì bài đã "
+            "có trong kho bị bỏ qua khi ghi."
+        ),
+    )
+    error: str | None = Field(default=None, description="Chỉ có khi status='failed'")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "run_id": "6054fbc0-b673-4595-b430-ee270b5d26f2",
+                    "status": "succeeded",
+                    "trigger": "cronjob",
+                    "topic": "Artificial Intelligence",
+                    "started_at": "2026-09-03T06:23:59Z",
+                    "finished_at": "2026-09-03T06:24:44Z",
+                    "duration_seconds": 45.3,
+                    "articles_scraped": 18,
+                    "articles_stored": 10,
+                    "error": None,
+                },
+                {
+                    "run_id": "0193f1b0-2d3c-7a19-8e44-1c9f7b2d3e55",
+                    "status": "failed",
+                    "trigger": "api",
+                    "topic": "Artificial Intelligence",
+                    "started_at": "2026-09-03T05:10:02Z",
+                    "finished_at": "2026-09-03T05:10:09Z",
+                    "duration_seconds": 7.1,
+                    "articles_scraped": 0,
+                    "articles_stored": None,
+                    "error": "ScraperAgent (critical) loi: NewsAPI tra ve 401",
+                },
+            ]
+        }
+    )
+
+    @classmethod
+    def from_domain(cls, run: PipelineRun) -> "RunOut":
+        """Dựng bản công khai từ entity domain."""
+        return cls(
+            run_id=run.run_id,
+            status=run.status.value,
+            trigger=run.trigger.value,
+            topic=run.topic,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            duration_seconds=run.duration_seconds,
+            articles_scraped=run.articles_scraped,
+            articles_stored=run.articles_stored,
+            error=run.error,
+        )
+
+
 class PaginatedResponse(BaseModel, Generic[T]):
     """
     Vỏ bọc chung cho mọi endpoint trả danh sách.
@@ -319,17 +438,30 @@ class PaginatedResponse(BaseModel, Generic[T]):
     items: list[T]
     pagination: PageMeta
 
+    @staticmethod
+    def meta_of(page: Page) -> PageMeta:
+        """Rút thông tin phân trang từ `Page` của tầng application."""
+        return PageMeta(
+            page=page.page,
+            size=page.size,
+            total_items=page.total_items,
+            total_pages=page.total_pages,
+            has_next=page.has_next,
+            has_prev=page.has_prev,
+        )
+
     @classmethod
     def from_page(cls, page: Page[Article]) -> "PaginatedResponse[ArticleOut]":
-        """Chuyển `Page[Article]` của tầng application thành response công khai."""
+        """Chuyển `Page[Article]` thành response công khai (FR-01)."""
         return PaginatedResponse[ArticleOut](
             items=[ArticleOut.from_domain(a) for a in page.items],
-            pagination=PageMeta(
-                page=page.page,
-                size=page.size,
-                total_items=page.total_items,
-                total_pages=page.total_pages,
-                has_next=page.has_next,
-                has_prev=page.has_prev,
-            ),
+            pagination=cls.meta_of(page),
+        )
+
+    @classmethod
+    def from_run_page(cls, page: Page[PipelineRun]) -> "PaginatedResponse[RunOut]":
+        """Chuyển `Page[PipelineRun]` thành response công khai (FR-06)."""
+        return PaginatedResponse[RunOut](
+            items=[RunOut.from_domain(r) for r in page.items],
+            pagination=cls.meta_of(page),
         )
