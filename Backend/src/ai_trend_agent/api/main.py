@@ -26,6 +26,7 @@ Iron Laws: L03 async-first, L05 FastAPI, L08 type hints + docstring.
 from fastapi import FastAPI
 
 from ai_trend_agent import __version__
+from ai_trend_agent.api.errors import install_error_handlers
 from ai_trend_agent.api.routers import health
 
 # Mô tả hiển thị ngay đầu trang /docs — coi như trang bìa của API.
@@ -52,6 +53,12 @@ app = FastAPI(
     redoc_url=None,       # Chỉ giữ Swagger; ReDoc không thêm giá trị ở dự án này.
     openapi_url="/openapi.json",
 )
+
+# [FR-09] Gắn handler RFC 7807 TRƯỚC khi khai báo router, để mọi lỗi — kể cả
+# 404 do không khớp route nào — đều ra cùng một hình dạng. Nếu bỏ bước này,
+# client gặp ba định dạng lỗi khác nhau tuỳ loại: HTTPException, lỗi
+# validation của Pydantic, và HTML 500 của Starlette.
+install_error_handlers(app)
 
 # Health nằm ở GỐC (không có /api/v1) — xem giải thích ở docstring đầu file.
 app.include_router(health.router)
