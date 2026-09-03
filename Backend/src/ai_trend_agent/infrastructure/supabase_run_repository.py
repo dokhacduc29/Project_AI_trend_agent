@@ -105,13 +105,39 @@ def _parse_dt(raw: str | None) -> datetime | None:
         return None
 
 
-def _row_to_run(row: dict[str, Any]) -> PipelineRun:
-    """Một dòng `pipeline_runs` → entity domain."""
+def _row_to_run(row: dict[str, Any]) -> PipelineRun | None:
+    """
+    Một dòng `pipeline_runs` → entity domain. `None` nếu dòng không đọc được.
+
+    `status` và `trigger` là hai cột DUY NHẤT không có giá trị mặc định hợp lý:
+    một run không rõ trạng thái thì mọi phán đoán về nó đều là bịa. Nên dòng
+    mang giá trị lạ — 'cancelled' do phiên bản sau thêm, NULL do ai đó sửa tay
+    trong SQL Editor, hoặc thiếu hẳn cột — bị BỎ QUA thay vì đoán bừa.
+
+    VÌ SAO KHÔNG ĐỂ LỖI NỔI LÊN: `RunStatus(row["status"])` ném `ValueError` và
+    `row["trigger"]` ném `KeyError`, mà lời gọi này nằm trong vòng lặp dựng
+    danh sách. Một dòng hỏng làm 500 TOÀN BỘ `GET /api/v1/runs` lẫn
+    `/api/v1/trends/latest`. Đổi "một endpoint sập" thành "một dòng biến mất
+    khỏi kết quả" là đánh đổi đúng — phần còn lại của lịch sử vẫn đọc được.
+    Cùng nguyên tắc với `_trend_from_json` và `_parse_dt` ở trên.
+    """
+    try:
+        status = RunStatus(row["status"])
+        trigger = RunTrigger(row["trigger"])
+    except (KeyError, ValueError):
+        _logger.warning(
+            "Bo qua dong pipeline_runs khong doc duoc (run_id=%s, status=%r, trigger=%r)",
+            row.get("run_id"),
+            row.get("status"),
+            row.get("trigger"),
+        )
+        return None
+
     return PipelineRun(
         run_id=str(row.get("run_id") or ""),
         topic=row.get("topic") or "",
-        status=RunStatus(row["status"]),
-        trigger=RunTrigger(row["trigger"]),
+        status=status,
+        trigger=trigger,
         started_at=_parse_dt(row.get("started_at")),
         finished_at=_parse_dt(row.get("finished_at")),
         articles_scraped=row.get("articles_scraped"),
@@ -282,9 +308,11 @@ class SupabaseRunRepository:
     ) -> Page[PipelineRun]:
         """Lịch sử chạy có phân trang (FR-06)."""
         rows, total = await asyncio.to_thread(self._list_sync, page, size, status)
-        return Page(
-            items=[_row_to_run(r) for r in rows], total_items=total, page=page, size=size
-        )
+        # Bỏ dòng không đọc được thay vì để nó làm 500 cả trang. `total_items`
+        # vẫn là con số DB đếm được, nên trang bị lọc có thể ít hơn `size` —
+        # chấp nhận: thà thiếu một dòng còn hơn mất cả endpoint.
+        items = [run for run in (_row_to_run(r) for r in rows) if run is not None]
+        return Page(items=items, total_items=total, page=page, size=size)
 
     def _has_active_sync(self) -> bool:
         res = (

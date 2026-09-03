@@ -124,6 +124,14 @@ def require_api_key(x_api_key: Annotated[str | None, Header()] = None) -> None:
     ký tự đầu khác nhau nên thời gian chạy tiết lộ độ dài tiền tố đúng. Với
     endpoint có thể gọi lặp, đó là kênh rò rỉ thật.
 
+    So sánh trên BYTES, không phải str. `compare_digest` với hai đối số `str`
+    đòi CẢ HAI phải thuần ASCII, không thì ném `TypeError`. Mà Starlette giải
+    mã header bằng latin-1, nên byte 0x80-0xFF trên dây thành ký tự non-ASCII
+    trong Python: một request gửi `X-API-Key: café` biến 401 thành 500 kèm
+    traceback — người lạ không cần biết key vẫn ép được lỗi máy chủ ở đúng
+    endpoint đang canh hạn mức Gemini. Bytes không có ràng buộc ASCII đó và
+    vẫn giữ nguyên tính chất so sánh thời gian hằng.
+
     [SRS 2.3] v5.0 cố ý chỉ dùng key tĩnh; OAuth2/JWT/RBAC nằm ngoài phạm vi.
     """
     expected = os.getenv("API_KEY", "")
@@ -132,7 +140,9 @@ def require_api_key(x_api_key: Annotated[str | None, Header()] = None) -> None:
             "API_KEY chua duoc cau hinh — tu choi moi request ghi (fail closed)."
         )
         raise UnauthorizedProblem()
-    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+    if not x_api_key:
+        raise UnauthorizedProblem()
+    if not secrets.compare_digest(x_api_key.encode("utf-8"), expected.encode("utf-8")):
         raise UnauthorizedProblem()
 
 
