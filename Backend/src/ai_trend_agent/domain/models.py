@@ -15,6 +15,7 @@ FIX LSP (Liskov Substitution Principle):
 =====================================================================
 """
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 
 class Sentiment(Enum):
@@ -35,6 +36,21 @@ class Article:
     summary: str = ""                     # [Phase 4] Nội dung tóm tắt từ AI
     sentiment: Sentiment = Sentiment.NEUTRAL # [Phase 4] Đánh giá tích cực/tiêu cực
     relevance_score: int = -1             # [Phase B] Điểm liên quan 0-10 do AI chấm (-1 = chưa chấm)
+
+    # ── [v5.0 / B2] Trường chỉ có khi bài ĐÃ được lưu ─────────────────────
+    # Bài vừa cào về chưa có danh tính trong kho, nên cả ba đều None/rỗng.
+    # Chỉ repository (đọc từ Supabase) mới điền chúng.
+    #
+    # Vì sao đặt ở đây thay vì tạo type `StoredArticle` riêng: `id` là danh
+    # tính thật của một thực thể đã được lưu — đặt trên entity là cách làm
+    # chuẩn. Tách type riêng thì đúng hơn về lý thuyết nhưng phải nuôi thêm
+    # một model gần trùng và code map qua lại, không đáng cho phạm vi v5.0.
+    #
+    # Cả ba đều CÓ giá trị mặc định nên pipeline v4.0 dựng Article như cũ
+    # vẫn chạy nguyên vẹn (ràng buộc C-04).
+    id: int | None = None                 # Khoá chính trong Supabase
+    created_at: datetime | None = None    # Thời điểm hệ thống thu thập (DB tự sinh)
+    topic: str = ""                       # Chủ đề của chu kỳ đã thu thập bài này
 
     def __str__(self) -> str:
         tag_str = ", ".join(self.tags) if self.tags else "Chưa phân loại"
