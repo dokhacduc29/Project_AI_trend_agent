@@ -92,6 +92,67 @@ class TrendReport:
         )
 
 
+class RunStatus(Enum):
+    """
+    Vòng đời một lần chạy pipeline.
+
+    `queued` chỉ xuất hiện khi run được kích hoạt qua API (FR-04): bản ghi
+    được tạo TRƯỚC khi trả 202 cho client, rồi việc thật mới chạy nền. Run do
+    CronJob thì vào thẳng `running` vì không có hàng đợi nào ở giữa.
+    """
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class RunTrigger(Enum):
+    """
+    Ai đã khởi động lần chạy này.
+
+    Thiếu thông tin này thì không trả lời được câu hỏi vận hành cơ bản nhất:
+    "hôm qua chạy mấy lần, do lịch hay do người bấm?" (FR-06 AC-06.2).
+    """
+
+    API = "api"
+    CRONJOB = "cronjob"
+    MANUAL = "manual"
+
+
+@dataclass
+class PipelineRun:
+    """
+    Một lần chạy pipeline — đơn vị quan sát của hệ thống (FR-04 → FR-06).
+
+    Tới v4.0, chạy xong là mọi thứ bốc hơi: không biết chu kỳ nào đã chạy, kéo
+    dài bao lâu, thu được bao nhiêu bài, hỏng ở đâu. Log có ghi nhưng log bị
+    xoay vòng và không truy vấn được.
+
+    `trend_report` nằm ngay đây thay vì một bảng riêng: báo cáo xu hướng luôn
+    là kết quả CỦA một lần chạy, không tồn tại độc lập.
+    """
+
+    run_id: str
+    topic: str
+    status: RunStatus
+    trigger: RunTrigger
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    articles_scraped: int | None = None
+    articles_stored: int | None = None
+    trend_report: "TrendReport | None" = None
+    error: str | None = None
+    created_at: datetime | None = None
+
+    @property
+    def duration_seconds(self) -> float | None:
+        """Thời gian chạy. None khi chưa xong — cố ý không trả 0 để khỏi nhầm."""
+        if self.started_at is None or self.finished_at is None:
+            return None
+        return round((self.finished_at - self.started_at).total_seconds(), 1)
+
+
 @dataclass
 class PipelineContext:
     """

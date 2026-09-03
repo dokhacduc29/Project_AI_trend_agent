@@ -35,7 +35,7 @@ from datetime import date
 from enum import Enum
 from typing import Generic, Protocol, TypeVar
 
-from ai_trend_agent.domain.models import Article, Sentiment
+from ai_trend_agent.domain.models import Article, RunStatus, RunTrigger, Sentiment, TrendReport
 
 T = TypeVar("T")
 
@@ -181,4 +181,40 @@ class ArticleRepository(Protocol):
         Trả về bình thường nghĩa là khỏe; hỏng thì raise. Cố ý không trả bool:
         thông điệp lỗi của exception chính là thứ cần đưa vào response 503.
         """
+        ...
+
+
+class RunRepository(Protocol):
+    """
+    Hợp đồng ghi lại lịch sử các lần chạy pipeline (FR-04 → FR-06).
+
+    Ba method ở đây là ĐƯỜNG GHI, đủ cho worker ghi nhật ký chu kỳ của mình.
+    Các method ĐỌC (`get`, `list_paginated`, `latest_with_trend`, `has_active`)
+    sẽ gia nhập khi làm router `/runs` và `/trends/latest` — giữ nguyên tắc
+    không khai báo method chưa ai hiện thực.
+
+    LƯU Ý VỀ TÍNH CHỊU LỖI: mọi lời gọi ở đây là ENRICHMENT theo phân loại của
+    ADR 0003. Ghi nhật ký hỏng thì log rồi đi tiếp — tuyệt đối không được làm
+    chết chu kỳ thu thập dữ liệu. Mất một dòng nhật ký còn hơn mất cả mẻ tin.
+    """
+
+    async def create(self, *, topic: str, trigger: RunTrigger) -> str:
+        """Tạo bản ghi run mới, trả về `run_id` (UUID dạng chuỗi)."""
+        ...
+
+    async def mark_running(self, run_id: str) -> None:
+        """Chuyển sang `running` và đóng dấu `started_at`."""
+        ...
+
+    async def finish(
+        self,
+        run_id: str,
+        *,
+        status: RunStatus,
+        articles_scraped: int | None = None,
+        articles_stored: int | None = None,
+        trend_report: TrendReport | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Kết thúc run: ghi trạng thái cuối, số liệu, báo cáo xu hướng, lỗi nếu có."""
         ...

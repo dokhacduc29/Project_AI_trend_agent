@@ -29,7 +29,8 @@ install_secret_redaction()
 
 # Import base_agent TRƯỚC để Factory sẵn sàng
 from ai_trend_agent.application.base_agent import BaseAgent, AgentFactory
-from ai_trend_agent.domain.models import PipelineContext
+from ai_trend_agent.application.ports import RunRepository
+from ai_trend_agent.domain.models import PipelineContext, RunStatus, RunTrigger
 from ai_trend_agent.infrastructure.gemini_client import reset_budget, budget_report
 from ai_trend_agent.domain import config
 
@@ -81,7 +82,12 @@ def validate_topic(user_input: str) -> str | None:
     return clean_topic[:config.MAX_TOPIC_LENGTH]
 
 
-async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext) -> bool:
+async def run_pipeline(
+    agents: list[BaseAgent],
+    ctx: PipelineContext,
+    run_repo: "RunRepository | None" = None,
+    trigger: RunTrigger = RunTrigger.CRONJOB,
+) -> bool:
     """
     [FIX DIP] Nhận danh sách BaseAgent (abstraction), KHÔNG nhận concrete class.
 
@@ -95,6 +101,14 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext) -> bool:
     [ADR 0011] Trả về True nếu chu kỳ đi hết pipeline, False nếu một agent
     CRITICAL lỗi giữa chừng. Dưới CronJob, giá trị này quyết định exit code:
     False → non-zero → Job Failed → backoffLimit. Không còn while True nuốt kết quả.
+
+    [B3a] `run_repo` ghi nhật ký chu kỳ vào bảng `pipeline_runs` (SRS P11).
+    Tham số này TÙY CHỌN và mặc định None: không truyền thì hành vi giống hệt
+    v4.0, nên 18 test cũ chạy không cần sửa một dòng.
+
+    Việc ghi nhật ký là ENRICHMENT theo ADR 0003 — chính `SupabaseRunRepository`
+    tự nuốt lỗi bên trong. Supabase sập lúc ghi nhật ký thì chu kỳ vẫn chạy tiếp
+    và vẫn đăng Discord. Mất một dòng nhật ký còn hơn mất cả mẻ tin.
     """
     logging.info("=" * 60)
     logging.info(f"KHOI DONG CHU KY QUET: '{ctx.topic.upper()}'")
@@ -103,9 +117,27 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext) -> bool:
     # [ADR 0005] Reset budget Gemini cho chu kỳ mới
     reset_budget()
 
-    for agent in agents:
+    run_id: str | None = None
+    if run_repo is not None:
+        run_id = await _safe_run_log(
+            lambda: run_repo.create(topic=ctx.topic, trigger=trigger), "create"
+        )
+        if run_id is not None:
+            await _safe_run_log(lambda: run_repo.mark_running(run_id), "mark_running")
+            logging.info(f"[RUN] Bat dau ghi nhat ky chu ky: run_id={run_id}")
+
+    articles_scraped: int | None = None
+
+    for idx, agent in enumerate(agents):
         try:
             ctx = await agent.execute(ctx)
+
+            # Số bài THÔ cào về = số bài ngay sau agent đầu tiên. Theo cấu trúc
+            # pipeline, agent[0] luôn là scraper (xem thứ tự dựng ở `main()`);
+            # các agent sau chỉ lọc bớt hoặc làm giàu, không thêm bài mới.
+            if idx == 0:
+                articles_scraped = len(ctx.articles)
+
             if not ctx.articles and isinstance(agent, BaseAgent):
                 logging.warning(f"{agent.agent_name} tra ve 0 bai. Kiem tra nguon.")
         except Exception as e:
@@ -114,6 +146,19 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext) -> bool:
             # đã cào/đã lưu ở các bước trước (no silent abort của cả pipeline).
             if getattr(agent, "is_critical", False):
                 logging.error(f"[CRITICAL] {agent.agent_name} loi: {e}. Dung chu ky.")
+                if run_id is not None and run_repo is not None:
+                    # Ghi rõ TÊN AGENT gây lỗi, không chỉ thông điệp: đọc nhật ký
+                    # là biết ngay hỏng ở khâu nào, khỏi mò log (FR-05 AC-05.2).
+                    await _safe_run_log(
+                        lambda: run_repo.finish(
+                            run_id,
+                            status=RunStatus.FAILED,
+                            articles_scraped=articles_scraped,
+                            articles_stored=_saved_count(agents),
+                            error=f"{agent.agent_name} (critical) loi: {e}",
+                        ),
+                        "finish/failed",
+                    )
                 return False
             logging.error(f"[ENRICHMENT] {agent.agent_name} loi: {e}. Bo qua, pipeline di tiep.")
             continue
@@ -124,8 +169,65 @@ async def run_pipeline(agents: list[BaseAgent], ctx: PipelineContext) -> bool:
         f"[BUDGET] Gemini calls={b['calls']}/{config.GEMINI_MAX_CALLS_PER_CYCLE} "
         f"| ~input_tokens={b['approx_input_tokens']} | blocked={b['blocked']}"
     )
+
+    if run_id is not None and run_repo is not None:
+        # [AC-05.3] Enrichment agent lỗi vẫn tính là SUCCEEDED — đúng ngữ nghĩa
+        # ADR 0003: chu kỳ đã đi hết pipeline và dữ liệu đã được lưu.
+        await _safe_run_log(
+            lambda: run_repo.finish(
+                run_id,
+                status=RunStatus.SUCCEEDED,
+                articles_scraped=articles_scraped,
+                articles_stored=_saved_count(agents),
+                trend_report=ctx.trend_report,
+            ),
+            "finish/succeeded",
+        )
+        logging.info(f"[RUN] Da ghi ket qua chu ky: run_id={run_id}")
+
     logging.info("=" * 60 + "\n")
     return True
+
+
+async def _safe_run_log(coro_factory, what: str) -> object | None:
+    """
+    Gọi một thao tác ghi nhật ký sao cho nó KHÔNG BAO GIỜ làm chết chu kỳ.
+
+    [C-04] `SupabaseRunRepository` đã tự nuốt lỗi bên trong, nhưng chừng đó
+    CHƯA ĐỦ. `RunRepository` khai bằng `Protocol` nên bất kỳ ai cũng viết được
+    một bản hiện thực — chỉ cần một bản ném lỗi là pipeline chết theo. Bảo đảm
+    "ghi nhật ký là enrichment" phải nằm ở NƠI CẦN NÓ, không uỷ thác cho từng
+    bản hiện thực nhớ mà làm.
+
+    Đây là phòng thủ nhiều lớp: implementation cẩn thận + call site cũng chặn.
+    Lỗi đã bắt được bằng test với một repo cố tình hỏng hoàn toàn.
+
+    Nhận `coro_factory` (hàm không tham số) chứ không nhận sẵn coroutine, để
+    exception xảy ra ngay lúc DỰNG lời gọi cũng nằm trong vùng được bảo vệ.
+    """
+    try:
+        return await coro_factory()
+    except Exception as e:
+        logging.error(f"[RUN] Ghi nhat ky that bai ({what}): {e}. Pipeline di tiep.")
+        return None
+
+
+def _saved_count(agents: list[BaseAgent]) -> int | None:
+    """
+    Số bài THỰC SỰ chèn mới, lấy từ storage agent.
+
+    Không dùng `len(ctx.articles)` vì đó là số bài GỬI ĐI lưu, còn upsert với
+    `ignore_duplicates=True` bỏ qua bài đã có — hai con số thường lệch nhau.
+    Chỉ con số từ storage agent mới trả lời đúng "chu kỳ này thu được gì MỚI".
+
+    Dò bằng `getattr` thay vì `isinstance` để không phải import concrete class
+    vào đây: agent nào công bố `last_saved_count` thì agent đó là nơi lưu.
+    """
+    for agent in agents:
+        count = getattr(agent, "last_saved_count", None)
+        if count is not None:
+            return count
+    return None
 
 
 async def main():
