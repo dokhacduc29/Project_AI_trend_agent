@@ -73,3 +73,22 @@ CREATE INDEX IF NOT EXISTS pipeline_runs_status_idx
 CREATE INDEX IF NOT EXISTS pipeline_runs_latest_trend_idx
     ON public.pipeline_runs (finished_at DESC)
     WHERE status = 'succeeded' AND trend_report IS NOT NULL;
+
+-- =====================================================================
+-- ROW LEVEL SECURITY — BẮT BUỘC, theo đúng ADR 0010
+-- =====================================================================
+-- Supabase phơi bảng ra REST API công khai. Không bật RLS thì bất kỳ ai có
+-- SUPABASE_URL + publishable key (key Supabase thiết kế để nhúng thẳng vào
+-- JavaScript trình duyệt, dashboard gắn nhãn "public") đều SELECT/INSERT/
+-- UPDATE/DELETE được toàn bộ bảng.
+--
+-- ADR 0010 ghi rõ đây không phải lo xa: chu kỳ production 2026-07-10 đã thực
+-- sự ghi 3 dòng vào `articles` bằng chính anon key đó.
+--
+-- Bảng này còn nhạy hơn `articles`: cột `error` chứa thông điệp lỗi nội bộ —
+-- tên agent, đôi khi cả chi tiết hạ tầng. Lộ ra còn tệ hơn lộ danh sách bài.
+--
+-- KHÔNG tạo policy nào. Không policy = từ chối tất cả với `anon` và
+-- `authenticated`. Pipeline dùng key `sb_secret_` (service_role) nên BỎ QUA
+-- RLS hoàn toàn — bật RLS không ảnh hưởng gì tới app.
+ALTER TABLE public.pipeline_runs ENABLE ROW LEVEL SECURITY;

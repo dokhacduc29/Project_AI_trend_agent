@@ -41,3 +41,8 @@ CREATE INDEX IF NOT EXISTS articles_created_at_idx ON public.articles (created_a
 
 -- Phục vụ bộ lọc theo chủ đề (FR-01).
 CREATE INDEX IF NOT EXISTS articles_topic_idx ON public.articles (topic);
+
+-- Row Level Security — xem ADR 0010. Không tạo policy nào: từ chối tất cả với
+-- `anon`/`authenticated`, còn key `sb_secret_` của pipeline bỏ qua RLS.
+-- Trên DB đang chạy, lệnh này đã được áp từ 2026-07-10; chạy lại vô hại.
+ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;

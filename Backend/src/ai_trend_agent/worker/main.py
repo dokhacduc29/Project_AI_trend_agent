@@ -42,6 +42,7 @@ from ai_trend_agent.infrastructure import trend_agent # noqa: F401 — side-effe
 from ai_trend_agent.infrastructure import supabase_storage  # noqa: F401 — side-effect import (đăng ký "storage" → Supabase)
 from ai_trend_agent.infrastructure import telegram_agent # noqa: F401 — side-effect import (đăng ký "telegram" — legacy, không dùng)
 from ai_trend_agent.infrastructure import discord_agent  # noqa: F401 — side-effect import (đăng ký "discord" → publisher hiện hành)
+from ai_trend_agent.infrastructure.supabase_run_repository import SupabaseRunRepository
 
 
 def _load_env_file() -> None:
@@ -312,7 +313,17 @@ async def main():
         api_key=ctx_template.api_key,
         gemini_api_key=ctx_template.gemini_api_key,
     )
-    completed = await run_pipeline(agents, ctx)
+    # [B3a] Ghi nhật ký chu kỳ vào bảng `pipeline_runs` (SRS P11).
+    #
+    # `trigger=CRONJOB` vì đây là worker one-shot — thứ mà K8s CronJob gọi theo
+    # lịch. Run do API kích hoạt sẽ truyền `RunTrigger.API` ở bước 9, và chính
+    # trường này phân biệt hai nguồn khi đọc lịch sử (FR-06 AC-06.2).
+    #
+    # Dựng repository ở ĐÂY chứ không bên trong `run_pipeline`: hàm đó nhận phụ
+    # thuộc từ ngoài để test thay được bằng bản giả. Ai dựng thì người đó biết
+    # môi trường — worker biết nó nói chuyện với Supabase, `run_pipeline` không cần biết.
+    run_repo = SupabaseRunRepository()
+    completed = await run_pipeline(agents, ctx, run_repo, RunTrigger.CRONJOB)
 
     # [ADR 0011] Agent critical lỗi → chu kỳ CHƯA hoàn tất → thoát non-zero để
     # CronJob đánh dấu Job Failed (kích backoffLimit), thay vì Succeeded âm thầm.
